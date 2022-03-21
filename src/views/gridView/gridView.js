@@ -591,8 +591,8 @@ export default function GridView() {
 
       console.log("GridView() - Executing selectedQueryChanged");
 
-      setLoading(false);
-      return;
+      // setLoading(false);
+      // return;
 
       const executeQueryResult = await runQuery();
 
@@ -609,7 +609,7 @@ export default function GridView() {
         return;
       }
 
-      // let queryData = executeQueryResult.records[0];
+      let queryData = executeQueryResult.records[0];
 
       // convert date strings to objects
       // queryData.forEach((r) => {});
@@ -619,7 +619,7 @@ export default function GridView() {
       // dispatch(setGridData(queryResult));
 
       // update grid row state
-      // setRowData(queryData);
+      setRowData(queryData);
       setLoading(false);
     };
 
@@ -1261,13 +1261,12 @@ export default function GridView() {
       sortable: true,
       resizable: true,
       filter: true,
-      flex: 1,
       minWidth: 150,
     };
   }, []);
 
   function onGridReady(e) {
-    autoSizeAll(false);
+    // autoSizeAll(false);
     // e.columnApi.resetColumnState();
   }
 
@@ -1408,11 +1407,6 @@ export default function GridView() {
     dispatch(setQueryRule(args.rule));
   }
 
-  // function updateRule(args) {
-  //   let predicate = queryBuilderRef.getPredicate(args.rule);
-  //   queryBuilderRef.refresh();
-  // }
-
   console.log("Rendering View");
   console.log(queryRule);
 
@@ -1527,7 +1521,7 @@ export default function GridView() {
               <TextField {...params} label='Queries' variant='standard' />
             )}
             onChange={(event, newValue) => {
-              // dispatch(setSelectedQuery(newValue));
+              dispatch(setSelectedQuery(newValue));
               return;
             }}
             sx={{ ml: 5, width: 225 }}
@@ -2243,18 +2237,17 @@ export default function GridView() {
           <div style={gridStyle} className='ag-theme-alpine'>
             <AgGridReact
               defaultColDef={defaultColDef}
-              ref={gridRef}
-              rowData={rowData}
               columnDefs={columnDefs}
-              suppressHorizontalScroll={false}
-              rowBuffer={100}
-              rowSelection='multiple'
-              suppressColumnVirtualisation={true}
               onGridReady={onGridReady}
               onCellValueChanged={gridCellValueChanged}
               onRowDataChanged={gridRowDataChanged}
               onRowSelected={gridRowSelected}
               onSelectionChanged={gridSelectionChanged}
+              ref={gridRef}
+              rowData={rowData}
+              rowBuffer={100}
+              rowSelection='multiple'
+              suppressColumnVirtualisation={true}
             ></AgGridReact>
           </div>
         </div>
