@@ -568,7 +568,7 @@ export default function GridView() {
   // and run the query
   useEffect(() => {
     const queryChanged = async () => {
-      if (selectedQuery === null) {
+      if (selectedObject === null || selectedQuery === null) {
         return;
       }
 
@@ -595,6 +595,11 @@ export default function GridView() {
       // return;
 
       const executeQueryResult = await runQuery();
+
+      if (executeQueryResult === undefined) {
+        setLoading = false;
+        return;
+      }
 
       if (executeQueryResult.status !== "ok") {
         // showToast(
@@ -1680,6 +1685,8 @@ export default function GridView() {
             mr: 2,
             mb: 3,
             width: "90%",
+            height: "50%",
+            overflow: "auto",
           }}
           border={2}
           borderColor={"primary.main"}
@@ -1698,6 +1705,64 @@ export default function GridView() {
                 width: "60%",
               }}
             >
+              <Stack
+                direction={"row"}
+                sx={{
+                  ml: 1,
+                  mb: 2,
+                }}
+              >
+                {/* run query */}
+                <Button
+                  id='runQueryBtn'
+                  variant='contained'
+                  onClick={() => {
+                    runQuery();
+                  }}
+                  size='small'
+                  sx={{
+                    mt: 2,
+                  }}
+                >
+                  Run Query
+                </Button>
+
+                {/* save query */}
+                <Button
+                  id='saveQueryBtn'
+                  variant='contained'
+                  size='small'
+                  onClick={() => {
+                    saveQuery();
+                  }}
+                  sx={{
+                    mt: 2,
+                    ml: 5,
+                  }}
+                >
+                  Save Query
+                </Button>
+
+                {/* show query */}
+                <Button
+                  id='showQueryBtn'
+                  variant='contained'
+                  size='small'
+                  onClick={() => {
+                    if (queryPanelVisible) {
+                      dispatch(setQueryPanelVisible(false));
+                    } else {
+                      dispatch(setQueryPanelVisible(true));
+                    }
+                  }}
+                  sx={{
+                    mt: 2,
+                    ml: 5,
+                  }}
+                >
+                  Show Query
+                </Button>
+              </Stack>
               <QueryBuilderComponent
                 id='querybuilder'
                 dataSource={rowData}
@@ -2110,59 +2175,6 @@ export default function GridView() {
                   })}
                 </ColumnsDirective>
               </QueryBuilderComponent>
-
-              <Stack direction={"row"}>
-                {/* run query */}
-                <Button
-                  id='runQueryBtn'
-                  variant='contained'
-                  onClick={() => {
-                    runQuery();
-                  }}
-                  size='small'
-                  sx={{
-                    mt: 2,
-                  }}
-                >
-                  Run Query
-                </Button>
-
-                {/* save query */}
-                <Button
-                  id='saveQueryBtn'
-                  variant='contained'
-                  size='small'
-                  onClick={() => {
-                    saveQuery();
-                  }}
-                  sx={{
-                    mt: 2,
-                    ml: 5,
-                  }}
-                >
-                  Save Query
-                </Button>
-
-                {/* show query */}
-                <Button
-                  id='showQueryBtn'
-                  variant='contained'
-                  size='small'
-                  onClick={() => {
-                    if (queryPanelVisible) {
-                      dispatch(setQueryPanelVisible(false));
-                    } else {
-                      dispatch(setQueryPanelVisible(true));
-                    }
-                  }}
-                  sx={{
-                    mt: 2,
-                    ml: 5,
-                  }}
-                >
-                  Show Query
-                </Button>
-              </Stack>
             </Box>
 
             {/* query panel */}
@@ -2238,6 +2250,7 @@ export default function GridView() {
             <AgGridReact
               defaultColDef={defaultColDef}
               columnDefs={columnDefs}
+              enableColResize='true'
               onGridReady={onGridReady}
               onCellValueChanged={gridCellValueChanged}
               onRowDataChanged={gridRowDataChanged}

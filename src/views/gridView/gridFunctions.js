@@ -25,6 +25,9 @@ import { CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
 import { DatePickerComponent } from "@syncfusion/ej2-react-calendars";
 import { NumericTextBoxComponent } from "@syncfusion/ej2-react-inputs";
 
+// AgGrid cell renderers
+import TextRenderer from "../../components/aggrid/cellRenderers/selectText";
+
 // Snackbar
 import { useSnackbar } from "notistack";
 import { Slide } from "@mui/material";
@@ -42,38 +45,74 @@ export async function createGridColumns(
   templateFields,
   objectMetadata
 ) {
+  // create grid columns for all fields found in metadata for the given types
+  // then hide the columns not found in the template
+
   // get the object fields metadata
   const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
   const objFields = objMetadata.metadata.fields;
 
   if (templateFields !== null && templateFields.length > 0) {
     const cols = [];
-    // need to use for..of so await will work
-    for (const templateField of templateFields) {
-      const columnName = templateField.name;
+
+    for (const field of objFields) {
+      const columnName = field.name;
 
       // get the metadata for this field
-      const fieldMetadata = objFields.find(
-        (f) => f.name === templateField.name
-      );
+      const fieldMetadata = objFields.find((f) => f.name === columnName);
+
+      // only create columns for these datatypes
+      const types = [
+        "boolean",
+        "combobox",
+        "currency",
+        "date",
+        "datetime",
+        "decimal",
+        "double",
+        "email",
+        "encryptedstring",
+        "id",
+        "int",
+        "long",
+        "percent",
+        "phone",
+        "picklist",
+        "reference",
+        "string",
+        "url",
+      ];
+
+      if (!types.includes(field.dataType)) {
+        continue;
+      }
 
       // create the column
-      const col = await createGridField(templateField, fieldMetadata);
+      const col = await createGridField(field, fieldMetadata);
 
       if (col.field !== null) {
         cols.push(col);
       }
     }
 
+    // hide columns not in template
+    cols.forEach((c) => {
+      if (templateFields.find((f) => f.name === c.field)) {
+        c.hide = false;
+      } else {
+        c.hide = true;
+      }
+    });
+
     return cols;
   }
 }
 
-export async function createGridField(templateField, fieldMetadata) {
-  const sfdcDataType = templateField.datatype;
+export async function createGridField(metadataField, fieldMetadata) {
+  const sfdcDataType = metadataField.dataType;
   const fieldLabel = fieldMetadata.label;
 
-  const fieldName = templateField.name;
+  const fieldName = metadataField.name;
 
   var numberValueFormatter = function (params) {
     return params.value.toFixed(2);
@@ -100,7 +139,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "boolean": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -117,7 +156,7 @@ export async function createGridField(templateField, fieldMetadata) {
       );
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -130,19 +169,20 @@ export async function createGridField(templateField, fieldMetadata) {
     case "currency": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: saleFilterParams,
         valueFormatter: saleValueFormatter,
         resizable: true,
+        type: "numericColumn",
         minWidth: 150,
       };
     }
     case "date": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -156,7 +196,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "datetime": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -170,7 +210,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "decimal": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -178,13 +218,14 @@ export async function createGridField(templateField, fieldMetadata) {
         },
         resizable: true,
         minWidth: 150,
+        type: "numericColumn",
         valueFormatter: numberValueFormatter,
       };
     }
     case "double": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -192,13 +233,14 @@ export async function createGridField(templateField, fieldMetadata) {
         },
         resizable: true,
         minWidth: 150,
+        type: "numericColumn",
         valueFormatter: numberValueFormatter,
       };
     }
     case "email": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -211,7 +253,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "encryptedstring": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -224,7 +266,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "id": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -237,7 +279,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "int": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -245,12 +287,13 @@ export async function createGridField(templateField, fieldMetadata) {
         },
         resizable: true,
         minWidth: 150,
+        type: "numericColumn",
       };
     }
     case "long": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -258,12 +301,13 @@ export async function createGridField(templateField, fieldMetadata) {
         },
         resizable: true,
         minWidth: 150,
+        type: "numericColumn",
       };
     }
     case "percent": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -271,12 +315,13 @@ export async function createGridField(templateField, fieldMetadata) {
         },
         resizable: true,
         minWidth: 150,
+        type: "numericColumn",
       };
     }
     case "phone": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -288,12 +333,18 @@ export async function createGridField(templateField, fieldMetadata) {
     }
     case "picklist": {
       const options = [];
-      fieldMetadata.picklistValues.forEach((p) =>
-        options.push({ value: p.value, text: p.label })
-      );
+      fieldMetadata.picklistValues.forEach((p) => options.push(p.value));
       return {
-        editable: true,
-        field: templateField.name,
+        cellEditor: "agRichSelectCellEditor",
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: options,
+          cellHeight: 20,
+          // cellRenderer: TextRenderer,
+          searchDebounceDelay: 500,
+          formatValue: (value) => value.text,
+        },
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
         filterParams: {
@@ -306,21 +357,21 @@ export async function createGridField(templateField, fieldMetadata) {
     }
     case "reference": {
       let relation = null;
-      let columnName = templateField.name;
+      let columnName = metadataField.name;
 
       // standard object relation
-      if (templateField.name.slice(-2) === "Id") {
+      if (metadataField.name.slice(-2) === "Id") {
         relation = columnName.slice(0, -2);
       }
 
       // custom object relation
-      if (templateField.name.slice(-3) === "__c") {
+      if (metadataField.name.slice(-3) === "__c") {
         relation = columnName.slice(0, -3);
       }
 
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -333,7 +384,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "string": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
@@ -346,7 +397,7 @@ export async function createGridField(templateField, fieldMetadata) {
     case "url": {
       return {
         editable: true,
-        field: templateField.name,
+        field: metadataField.name,
         headerName: fieldLabel,
         filter: "agTextColumnFilter",
         filterParams: {
