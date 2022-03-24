@@ -1,5 +1,7 @@
 module.exports = async function (fastify, options, next) {
   fastify.post("/knexInsert", async function (request, reply) {
+    // used to insert and update Postgres tables
+
     const knex = fastify.knex;
 
     // body contains array of row ids
@@ -13,7 +15,8 @@ module.exports = async function (fastify, options, next) {
 
     try {
       const records = await knex(table)
-        .insert(values, columns)
+        .insert(values)
+        // .insert(values, columns)
         .onConflict("id")
         .merge()
         .returning("*");

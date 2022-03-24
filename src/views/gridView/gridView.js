@@ -92,6 +92,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import SaveTemplateIcon from "@mui/icons-material/ViewColumn";
 
 // Syncfusion
 import {
@@ -152,6 +153,7 @@ export default function GridView() {
   const templateSelectorRef = useRef(null);
   const querySelectorRef = useRef(null);
   const jsonButton = useRef(null);
+  const saveTemplateTextField = useRef(null);
   const saveQueryTextField = useRef(null);
   const sqlButton = useRef(null);
   const queryRuleContent = useRef(null);
@@ -181,6 +183,7 @@ export default function GridView() {
   const [queryContentRows, setQueryContentRows] = useState(5);
   const [showQuery, setShowQuery] = useState(false);
   const [saveQueryText, setSaveQueryText] = useState("");
+  const [saveTemplateText, setSaveTemplateText] = useState("");
 
   const sidebarSize = useSelector((state) => state.sidebarSize);
   const isLoggedIn = useSelector((state) => state.isLoggedIn);
@@ -480,7 +483,7 @@ export default function GridView() {
     objChanged();
   }, [selectedObject, dispatch, enqueueSnackbar, objectMetadata, userInfo]);
 
-  // selectedTemplate create the grid columns
+  // selectedTemplate changed, create the grid columns
   useEffect(() => {
     const tmpChanged = async () => {
       if (selectedTemplate === null || selectedTemplate.id === "") {
@@ -490,7 +493,7 @@ export default function GridView() {
       try {
         // get the template fields for selected template
         const templateFieldResult = await gf.getTemplateFields(
-          selectedTemplate.id
+          selectedTemplate
         );
 
         if (templateFieldResult.status === "error") {
@@ -505,7 +508,8 @@ export default function GridView() {
         const gridCols = await gf.createGridColumns(
           selectedObject.id,
           templateFieldData,
-          objectMetadata
+          objectMetadata,
+          gridRef
         );
 
         // only store gridColumns if they changed
@@ -1088,6 +1092,180 @@ export default function GridView() {
     setLoading(false);
   }
 
+  async function saveTemplate() {
+    // called from Grid toolbar
+    try {
+      setLoading(true);
+      // get the selected template and determine if the current user is the owner
+      const templateUrl = "/postgres/knexSelect";
+      const templateResult = await gf.getTemplate(
+        selectedTemplate.id,
+        userInfo
+      );
+      if (templateResult.status !== "ok") {
+        throw new Error(
+          `gridView-saveTemplate() - ${templateResult.errorMessage}`
+        );
+      }
+
+      // always returns 1 record
+      const templateRec = templateResult.records[0];
+
+      let templateName = "";
+      if (templateRec.owner !== userInfo.userEmail) {
+        // save as private template
+        // prompt user for name
+        setOpenSaveTemplateDialog(true);
+        return;
+      }
+
+      // user is owner of the template, so
+      // update the template fields
+
+      // get the visible grid columns
+      const visibleColumns = [];
+      const gridColumns = gridRef.current.columnApi.getAllGridColumns();
+      gridColumns.forEach((g) => {
+        // get column def
+        const def = gridRef.current.columnApi.getColumn(g.colId);
+        if (def.visible) {
+          visibleColumns.push(g);
+        }
+      });
+
+      // get the selected template fields
+      const templateFieldResult = await gf.getTemplateFields(selectedTemplate);
+
+      if (templateFieldResult.status === "error") {
+        throw new Error(templateFieldResult.errorMessage);
+      }
+
+      const templateFields = templateFieldResult.records;
+
+      if (templateFields.length > 0) {
+        // delete existing template fields
+        const deleteIds = [];
+        templateFields.forEach((t) => {
+          deleteIds.push(t.id);
+        });
+
+        const deleteResult = await gf.deleteTemplateFields(deleteIds);
+
+        if (deleteResult.status === "error") {
+          throw new Error(deleteResult.errorMessage);
+        }
+      }
+
+      // get the field metadata
+      const objMetadata = objectMetadata.find(
+        (m) => m.objName === selectedObject.id
+      );
+      const metadataFields = objMetadata.metadata.fields;
+
+      // create template_field records
+      const tfRecs = [];
+      visibleColumns.forEach((c, index) => {
+        const metadataField = metadataFields.find(
+          (f) => f.name === c.colDef.field
+        );
+        const fieldDataType = metadataField.dataType;
+
+        const newRec = {
+          templateid: selectedTemplate.id,
+          name: c.colDef.field,
+          datatype: fieldDataType,
+          sort: "",
+          filter: "",
+          aggregation: "",
+          split: false,
+          formula: "",
+          group: false,
+          group_field: "",
+          column_order: index,
+        };
+
+        tfRecs.push(newRec);
+      });
+
+      const insertUrl = "/postgres/knexInsert";
+
+      // const insertColumns = [
+      //   "id",
+      //   "templateid",
+      //   "name",
+      //   "datatype",
+      //   "sort",
+      //   "filter",
+      //   "aggregation",
+      //   "split",
+      //   "formula",
+      //   "group",
+      //   "group_field",
+      //   "column_order",
+      // ];
+
+      // const insertValues = {
+      //   id: selectedTemplate.id,
+      //   name: selectedTemplate.label,
+      //   owner: userInfo.userEmail,
+      //   object: selectedObject.id,
+      //   is_public: selectedTemplate.is_public,
+      //   default: selectedTemplate.default,
+      //   is_active: true,
+      //   orgid: userInfo.organizationId,
+      // };
+
+      const insertPayload = {
+        table: "template_field",
+        // columns: insertColumns,
+        values: tfRecs,
+      };
+
+      const insertResponse = await fetch(insertUrl, {
+        method: "post",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(insertPayload),
+      });
+
+      if (!insertResponse.ok) {
+        throw new Error(`gridView-saveTemplate() - ${insertResponse.message}`);
+      }
+
+      let insertResult = await insertResponse.json();
+
+      // notify user
+      const snackOptions = {
+        variant: "success",
+        autoHideDuration: 3000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      const key = enqueueSnackbar("Template Saved", snackOptions);
+
+      // adds the template to the grid template selector options
+      // let queryOps = [...queryOptions];
+      // const newOpt = {
+      //   id: newQuery.name,
+      //   label: newQuery.name,
+      // };
+      // queryOps.push(newOpt);
+      // dispatch(setQueryOptions(queryOps));
+
+      // set the selected query to the new value
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      console.log(error.message);
+      return;
+    }
+  }
+
   async function saveQuery() {
     try {
       setLoading(true);
@@ -1219,7 +1397,24 @@ export default function GridView() {
     const a = 1;
   }
 
+  function ruleChanged(event) {
+    if (event.type === "deleteRule") {
+      const validRule = queryBuilderRef.current.getRules();
+      dispatch(setQueryRule(validRule));
+      // let queryContent = null;
+
+      // if (jsonButton.current.checked) {
+      //   queryContent = JSON.stringify(validRule, null, 4);
+      // } else {
+      //   queryContent = queryBuilderRef.current.getSqlFromRules(validRule);
+      // }
+
+      // setQueryRuleText(queryContent);
+    }
+  }
+
   // GRID EVENT HANDLERS
+
   function gridCellValueChanged(params) {
     const rowIndex = params.rowIndex;
     const columnName = params.column;
@@ -1270,6 +1465,15 @@ export default function GridView() {
     };
   }, []);
 
+  function onFirstDataRendered(params) {
+    const allColumnIds = [];
+    const skipHeader = false;
+    gridRef.current.columnApi.getAllColumns().forEach((column) => {
+      allColumnIds.push(column.getId());
+    });
+    gridRef.current.columnApi.autoSizeColumns(allColumnIds, skipHeader);
+  }
+
   function onGridReady(e) {
     // autoSizeAll(false);
     // e.columnApi.resetColumnState();
@@ -1285,9 +1489,15 @@ export default function GridView() {
 
   // MUI save Dialog
   const [openSaveDialog, setOpenSaveDialog] = React.useState(false);
+  const [openSaveTemplateDialog, setOpenSaveTemplateDialog] =
+    React.useState(false);
 
   const handleSaveQueryOpen = () => {
     setOpenSaveDialog(true);
+  };
+
+  const handleSaveTemplateOpen = () => {
+    setOpenSaveTemplateDialog(true);
   };
 
   async function handleSaveQueryClose(e) {
@@ -1364,13 +1574,87 @@ export default function GridView() {
     setQueryRuleText(queryContent);
   }
 
+  async function handleSaveTemplateClose(e) {
+    // save a new template
+    setOpenSaveTemplateDialog(false);
+    const templateName = saveTemplateTextField;
+
+    // save a new template
+    const insertUrl = "/postgres/knexInsert";
+
+    const insertColumns = [
+      "template_name",
+      "owner",
+      "is_active",
+      "object",
+      "is_public",
+      "is_related",
+      "default",
+      "orgid",
+    ];
+
+    const insertValues = {
+      template_name: templateName,
+      owner: userInfo.userEmail,
+      is_active: true,
+      object: selectedObject.id,
+      is_public: false,
+      is_related: false,
+      default: false,
+      orgid: userInfo.organizationId,
+    };
+
+    const insertPayload = {
+      table: "template",
+      columns: insertColumns,
+      values: insertValues,
+    };
+
+    const insertResponse = await fetch(insertUrl, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(insertPayload),
+    });
+
+    if (!insertResponse.ok) {
+      throw new Error(`gridView-saveTemplate() - ${insertResponse.message}`);
+    }
+
+    let insertResult = await insertResponse.json();
+    const newTemplate = insertResult.records[0];
+
+    // notify user
+    const snackOptions = {
+      variant: "success",
+      autoHideDuration: 5000,
+      anchorOrigin: {
+        vertical: "top",
+        horizontal: "right",
+      },
+      TransitionComponent: Slide,
+    };
+
+    const key = enqueueSnackbar("Template Saved", snackOptions);
+  }
+
   const handleCancelQueryClose = (e) => {
     setOpenSaveDialog(false);
   };
 
-  // Implementation of setTextValue method
-  function setTextValue(event) {
+  const handleCancelTemplateClose = (e) => {
+    setOpenSaveTemplateDialog(false);
+  };
+
+  // Implementation of Query setTextValue method
+  function setQueryTextValue(event) {
     setSaveQueryText(event.target.value);
+  }
+
+  // Implementation of Template setTextValue method
+  function setTemplateTextValue(event) {
+    setSaveTemplateText(event.target.value);
   }
 
   // QueryBuilder select options mapping
@@ -1458,12 +1742,37 @@ export default function GridView() {
               type='text'
               fullWidth
               variant='standard'
-              onChange={setTextValue}
+              onChange={setQueryTextValue}
             />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCancelQueryClose}>Cancel</Button>
             <Button onClick={handleSaveQueryClose}>Save</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={openSaveTemplateDialog} onClose={handleSaveTemplateClose}>
+          <DialogTitle>Save Tempate</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Only template owner can make changes to this template. Enter a
+              template name to save as a private template.
+            </DialogContentText>
+            <TextField
+              ref={saveTemplateTextField}
+              autoFocus
+              margin='dense'
+              id='name'
+              label='Name'
+              type='text'
+              fullWidth
+              variant='standard'
+              onChange={setTemplateTextValue}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCancelTemplateClose}>Cancel</Button>
+            <Button onClick={handleSaveTemplateClose}>Save</Button>
           </DialogActions>
         </Dialog>
 
@@ -1650,6 +1959,25 @@ export default function GridView() {
             </IconButton>
           </Tooltip>
 
+          {/* save templates button */}
+          <Tooltip title='Save Templates' placement='top'>
+            <IconButton
+              sx={{
+                color: "#354868",
+                "&:hover": {
+                  color: "whitesmoke",
+                },
+              }}
+              aria-label='Save Templates'
+              size='medium'
+              onClick={() => {
+                saveTemplate();
+              }}
+            >
+              <SaveTemplateIcon />
+            </IconButton>
+          </Tooltip>
+
           {/* relationships button */}
           <Tooltip title='Relationships' placement='top'>
             <IconButton
@@ -1769,6 +2097,8 @@ export default function GridView() {
                 ref={queryBuilderRef}
                 rule={queryRule}
                 sortDirection={"Ascending"}
+                ruleChange={(e) => ruleChanged(e)}
+                // change={(e) => queryBuilderChanged(e)}
               >
                 <ColumnsDirective>
                   {queryColumns.map((item) => {
@@ -2251,6 +2581,7 @@ export default function GridView() {
               defaultColDef={defaultColDef}
               columnDefs={columnDefs}
               enableColResize='true'
+              onFirstDataRendered={onFirstDataRendered}
               onGridReady={onGridReady}
               onCellValueChanged={gridCellValueChanged}
               onRowDataChanged={gridRowDataChanged}
