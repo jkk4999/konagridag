@@ -40,6 +40,64 @@ export function compareArrays(array1, array2) {
   });
 }
 
+export async function createDefaultGridColumns(selectedObject, objectMetadata) {
+  // create grid columns for all fields found in metadata for the given types
+
+  // get the object fields metadata
+  const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
+  const objFields = objMetadata.metadata.fields;
+
+  const cols = [];
+
+  // create a column for all metadata fields
+  // used for hide/show column function
+  for (const field of objFields) {
+    const columnName = field.name;
+
+    // get the metadata for this field
+    const fieldMetadata = objFields.find((f) => f.name === columnName);
+
+    // only create columns for these datatypes
+    const types = [
+      "boolean",
+      "combobox",
+      "currency",
+      "date",
+      "datetime",
+      "decimal",
+      "double",
+      "email",
+      "encryptedstring",
+      "id",
+      "int",
+      "long",
+      "percent",
+      "phone",
+      "picklist",
+      "reference",
+      "string",
+      "url",
+    ];
+
+    if (!types.includes(field.dataType)) {
+      continue;
+    }
+
+    // create the column
+    const col = await createGridField(field, fieldMetadata);
+
+    if (col.field !== null) {
+      cols.push(col);
+    }
+  }
+
+  // set the first column to use agGroupCellRenderer (to show subview)
+  const firstCol = cols[0];
+  firstCol.cellRenderer = "agGroupCellRenderer";
+
+  return cols;
+}
+
 export async function createGridColumns(
   selectedObject,
   templateFields,
@@ -56,9 +114,11 @@ export async function createGridColumns(
   if (templateFields !== null && templateFields.length > 0) {
     const cols = [];
 
-    // sort template fiels by column order
+    // sort template fielgs by column order
     templateFields.sort((a, b) => a.column_order - b.column_order);
 
+    // create a column for all metadata fields
+    // used for hide/show column function
     for (const field of objFields) {
       const columnName = field.name;
 
@@ -121,32 +181,30 @@ export async function createGridColumns(
       colOrder.push(gridCol);
     });
 
-    // apply sorting
+    // set the first column to use agGroupCellRenderer (to show subview)
+    const firstCol = colOrder[0];
+    firstCol.cellRenderer = "agGroupCellRenderer";
+
+    // apply sorting, grouping and aggregrations
+    // hide group columns
     const columnSort = [];
     colOrder.forEach((c, index) => {
       // get template field definition
       const templateField = templateFields.find((t) => t.name === c.field);
 
+      // apply sort
       if (templateField.sort !== "") {
-        const newSortObj = {
-          colId: c.colId,
-          sort: templateField.sort,
-          sortIndex: index,
-        };
-        columnSort.push(newSortObj);
+        c.sort = templateField.sort;
+        c.sortIndex = index;
       }
-    });
 
-    // apply column grouping
-    const groupCols = [];
-    colOrder.forEach((c, index) => {
-      // get template field definition
-      const templateField = templateFields.find((t) => t.name === c.field);
-
+      // apply column groups
       if (templateField.group) {
         c.rowGroup = true;
+        c.hide = true;
       } else {
         c.rowGroup = false;
+        c.hide = false;
       }
 
       if (
@@ -156,6 +214,13 @@ export async function createGridColumns(
         c.aggFunc = templateField.aggregation;
         c.allowedAggFuncs = ["sum", "min", "max", "count", "avg"];
         c.enableValue = true;
+      }
+
+      // apply column splits
+      if (templateField.split) {
+        c.pinned = true;
+      } else {
+        c.pinned = false;
       }
     });
 
@@ -170,12 +235,106 @@ export async function createGridColumns(
 
     // add the group column aggregations
 
-    gridRef.current.columnApi.applyColumnState({
-      state: columnSort,
-      defaultState: { sort: null },
-    });
+    // gridRef.current.columnApi.applyColumnState({
+    //   state: columnSort,
+    //   defaultState: { sort: null },
+    // });
 
     return colOrder;
+  }
+}
+
+export function createSaveTemplateRecords(
+  selectedObject,
+  gridColumns,
+  objectMetadata,
+  selectedTemplate
+) {
+  // create a grid row (template record) for each grid column
+
+  // get the object fields metadata
+  const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
+  const metadataFields = objMetadata.metadata.fields;
+
+  const templateRecs = [];
+  gridColumns.forEach((v, index) => {
+    // get datatype of field from metadata
+    const metadataField = metadataFields.find((f) => f.name === v.colDef.field);
+    const fieldDataType = metadataField.dataType;
+
+    const isGroup = v.colDef.rowGroup || v.rowGroupActive;
+
+    const newRec = {
+      name: v.colDef.field,
+      templateid: selectedTemplate === null ? null : selectedTemplate.id,
+      column_order: index,
+      datatype: fieldDataType,
+      sort: v.sort !== undefined ? v.sort : "",
+      filter: "",
+      aggregation: v.aggFunc !== undefined ? v.aggFunc : "",
+      split: v.pinned ? v.pinned : false,
+      formula: "",
+      group: isGroup,
+      group_field: "",
+    };
+
+    templateRecs.push(newRec);
+  });
+
+  return templateRecs;
+}
+
+export async function createTemplate(
+  templateName,
+  selectedObject,
+  templateVisibility,
+  userInfo
+) {
+  const insertUrl = "/postgres/knexInsert";
+
+  const values = {
+    template_name: templateName,
+    orgid: userInfo.organizationId,
+    owner: userInfo.userEmail,
+    is_active: true,
+    object: selectedObject,
+    is_public: templateVisibility,
+    is_related: false,
+    default: false,
+  };
+
+  const insertPayload = {
+    table: "template",
+    values: values,
+    key: "id",
+  };
+
+  const insertResponse = await fetch(insertUrl, {
+    method: "post",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(insertPayload),
+  });
+
+  if (!insertResponse.ok) {
+    throw new Error("Error creating template");
+  }
+
+  const insertResult = await insertResponse.json();
+
+  if (insertResult.status !== "ok") {
+    return {
+      status: "error",
+      errorMessage: insertResult.errorMessage,
+      records: [],
+    };
+  } else {
+    return {
+      status: "ok",
+      errorMessage: null,
+      records: insertResult.records,
+    };
   }
 }
 
@@ -190,8 +349,8 @@ export async function createGridField(metadataField, fieldMetadata) {
   };
 
   const dateValueFormatter = function (params) {
-    if (params.value === undefined) {
-      return;
+    if (params.value === undefined || params.value === null) {
+      return "";
     }
     const dateValue = new Date(params.value);
     return dateValue.toLocaleDateString();
@@ -217,14 +376,41 @@ export async function createGridField(metadataField, fieldMetadata) {
     return "$" + formatted;
   };
 
+  // define a column type (you can define as many as you like)
+  // const columnTypes = {
+  //   dateColumn: {
+  //     // filter: "agMultiColumnFilter",
+  //     filterParams: {
+  //       // provide comparator function
+  //       comparator: (dateFromFilter, cellValue) => {
+  //         // In the example application, dates are stored as dd/mm/yyyy
+  //         // We create a Date object for comparison against the filter date
+  //         const dateParts = cellValue.split("/");
+  //         const day = Number(dateParts[0]);
+  //         const month = Number(dateParts[1]) - 1;
+  //         const year = Number(dateParts[2]);
+  //         const cellDate = new Date(year, month, day);
+  //         // Now that both parameters are Date objects, we can compare
+  //         if (cellDate < dateFromFilter) {
+  //           return -1;
+  //         } else if (cellDate > dateFromFilter) {
+  //           return 1;
+  //         } else {
+  //           return 0;
+  //         }
+  //       },
+  //     },
+  //   },
+  // };
+
   switch (sfdcDataType) {
     case "boolean": {
       return {
         checkboxSelection: true,
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -239,6 +425,7 @@ export async function createGridField(metadataField, fieldMetadata) {
       );
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
         filter: "agSetColumnFilter",
@@ -252,9 +439,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "currency": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: saleFilterParams,
         minWidth: 150,
         resizable: true,
@@ -265,39 +453,42 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "date": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
         minWidth: 150,
         resizable: true,
-        type: ["dateColumn"],
+        type: "dateColumn",
         valueFormatter: dateValueFormatter,
       };
     }
     case "datetime": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
         minWidth: 150,
         resizable: true,
-        type: ["dateColumn"],
+        type: "dateColumn",
         valueFormatter: dateValueFormatter,
       };
     }
     case "decimal": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -310,9 +501,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "double": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -325,9 +517,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "email": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -338,9 +531,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "encryptedstring": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -351,9 +545,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "id": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -364,9 +559,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "int": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -378,9 +574,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "long": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -392,9 +589,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "percent": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           excelMode: "mac",
         },
@@ -406,9 +604,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "phone": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -429,9 +628,10 @@ export async function createGridField(metadataField, fieldMetadata) {
           formatValue: (value) => value.text,
         },
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agSetColumnFilter",
+        // filter: "agSetColumnFilter",
         filterParams: {
           // can be 'windows' or 'mac'
           excelMode: "mac",
@@ -456,9 +656,10 @@ export async function createGridField(metadataField, fieldMetadata) {
 
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -469,9 +670,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "string": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -482,9 +684,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     case "url": {
       return {
         editable: metadataField.calculated ? false : true,
+        enableRowGroup: true,
         field: metadataField.name,
         headerName: fieldLabel,
-        filter: "agTextColumnFilter",
+        // filter: "agTextColumnFilter",
         filterParams: {
           buttons: ["reset", "apply"],
         },
@@ -718,7 +921,7 @@ export async function createQueryColumn(metadataField) {
   }
 }
 
-export async function deleteTemplateFields(idArray) {
+export async function deleteTemplateFields(selectedTemplate) {
   const url = "/postgres/knexDelete";
 
   const columns = [
@@ -736,12 +939,16 @@ export async function deleteTemplateFields(idArray) {
     "column_order",
   ];
 
+  const values = {
+    templateid: selectedTemplate.id,
+  };
+
   const payload = {
     table: "template_field",
     columns: columns,
-    values: [],
-    rowIds: idArray,
-    idField: "id",
+    values: values,
+    rowIds: [],
+    idField: "",
   };
 
   try {
@@ -1044,7 +1251,8 @@ export async function getObjectOptions(userInfo) {
 
 // metadata manager
 export async function getObjectMetadata(sobject, userInfo, objectMetadata) {
-  // creates object metadata or returns cached result
+  // creates metadata for selected object
+  // created if required
 
   const objMetadata = objectMetadata.find((o) => o.objName === sobject);
 
@@ -1146,6 +1354,68 @@ export async function getQuery(queryId, userInfo) {
       status: "ok",
       errorMessage: null,
       records: queries,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      errorMessage: error.message,
+      records: [],
+    };
+  }
+}
+
+export async function getRelationshipPreferences(userInfo) {
+  try {
+    const preferencesUrl = "/postgres/knexSelect";
+
+    // get all columns
+    let columns = null;
+
+    // get the templates from the database
+    const values = {
+      username: userInfo.userEmail,
+    };
+
+    const prefPayload = {
+      table: "user_relation_prefs",
+      columns: columns,
+      values: values,
+      rowIds: [],
+      idField: null,
+    };
+
+    const prefResponse = await fetch(preferencesUrl, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(prefPayload),
+    });
+
+    if (!prefResponse.ok) {
+      throw new Error(
+        `Network error - Error getting user relation preferences`
+      );
+    }
+
+    const prefResult = await prefResponse.json();
+
+    if (prefResult.status !== "ok") {
+      throw new Error("Error getting user relation preferences");
+    }
+
+    let relationPrefs = [];
+
+    if (prefResult.records.length === 0) {
+      relationPrefs = [];
+    } else {
+      relationPrefs = prefResult.records; // array
+    }
+
+    return {
+      status: "ok",
+      errorMessage: null,
+      records: relationPrefs,
     };
   } catch (error) {
     return {
@@ -1350,6 +1620,10 @@ export async function getTemplateFields(selectedTemplate) {
 
     let templateFields = result.records;
 
+    if (templateFields.length === 0) {
+      throw new Error(`getTemplateFields() - No fields found for template`);
+    }
+
     // sort by column_order
     templateFields.sort((a, b) => a.column_order - b.column_order);
 
@@ -1368,7 +1642,7 @@ export async function getTemplateFields(selectedTemplate) {
 }
 
 // load template selector options
-export async function getTemplateOptions(selectedObject, userInfo) {
+export async function getTemplateRecords(selectedObject, userInfo) {
   // returns public & private templates for the selectedObject
   const url = "/postgres/knexSelect";
 
@@ -1612,6 +1886,8 @@ export async function runQuery(selectedObject, whereClause) {
     };
   }
 }
+
+export async function getRelatedRecords(selectedObject, selectedRowId) {}
 
 // configure the grid columns
 export async function SelectedTemplateChanged(

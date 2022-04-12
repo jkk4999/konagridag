@@ -9,6 +9,7 @@ module.exports = async function (fastify, options, next) {
     const table = payload.table;
     const columns = payload.columns;
     const values = payload.values;
+    const key = payload.key;
 
     // add id to column set
     // columns.unshift("id");
@@ -17,7 +18,7 @@ module.exports = async function (fastify, options, next) {
       const records = await knex(table)
         .insert(values)
         // .insert(values, columns)
-        .onConflict("id")
+        .onConflict(key)
         .merge()
         .returning("*");
       return {

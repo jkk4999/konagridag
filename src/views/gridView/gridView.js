@@ -7,18 +7,24 @@ import React, {
   useCallback,
 } from "react";
 import { useSelector, useDispatch } from "react-redux";
-
 import * as ReactDom from "react-dom";
+
+// react-hook-form
+import { useForm, Controller } from "react-hook-form";
 
 // React Spinner
 import LoadingOverlay from "react-loading-overlay-ts";
 import BounceLoader from "react-spinners/BounceLoader";
 import GridLoader from "react-spinners/GridLoader";
 
+// subviews
+import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
+
 // Redux
 import { addMetadata } from "../../features/objectMetadataSlice";
 import { setGridColumns } from "../../features/gridColumnsSlice";
 import { setGridData } from "../../features/gridDataSlice";
+import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
 import { setObjectList } from "../../features/objectListSlice";
 import { setObjectOptions } from "../../features/objectOptionsSlice";
 import { setQueryColumns } from "../../features/queryColumnsSlice";
@@ -28,6 +34,8 @@ import { setQueryPanelVisible } from "../../features/queryPanelVisabilitySlice";
 import { setQueryRule } from "../../features/queryRuleSlice";
 import { setQueryRuleText } from "../../features/queryRuleTextSlice";
 import { setQueryList } from "../../features/queryListSlice";
+import { setRelationPreferences } from "../../features/relationPreferencesSlice";
+// import { setSelectedGridRow } from "../../features/selectedGridRowSlice";
 import { setSelectedObject } from "../../features/selectedObjectSlice";
 import { setSelectedQuery } from "../../features/selectedQuerySlice";
 import { setSelectedTemplate } from "../../features/selectedTemplateSlice";
@@ -41,6 +49,8 @@ import { AgGridReact } from "ag-grid-react";
 import "ag-grid-enterprise";
 import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
+import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
 
 // Mui
 import { makeStyles } from "@mui/styles";
@@ -48,11 +58,13 @@ import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
 import { IconButton } from "@mui/material";
 import Button from "@mui/material/Button";
+import { Checkbox } from "@mui/material";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
+import { FormControlLabel } from "@mui/material";
 import { Select } from "@mui/material/Select";
 import { Stack } from "@mui/material";
 import { styled, useTheme } from "@mui/material/styles";
@@ -113,12 +125,14 @@ import {
   MultiSelectComponent,
 } from "@syncfusion/ej2-react-dropdowns";
 import { NumericTextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { RadioButtonComponent, CheckBox } from "@syncfusion/ej2-react-buttons";
+import { RadioButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 
 import * as gf from "./gridFunctions";
 import { grid } from "@mui/system";
 import { rippleEffect } from "@syncfusion/ej2-base";
+import { render } from "@testing-library/react";
+import { CheckBox } from "@mui/icons-material";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -138,18 +152,20 @@ export default function GridView() {
   // Snackbar
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
+  // React-Hook-form
+  const { register } = useForm();
+
   const onClickDismiss = (key) => () => {
     notistackRef.current.closeSnackbar(key);
   };
 
   const notistackRef = React.createRef();
 
-  // react spinner
-  let [loading, setLoading] = useState(true);
-
   // local object references
   const gridRef = useRef(null);
+  const saveTemplateGridRef = useRef(null);
   const objectSelectorRef = useRef(null);
+  const templateVisibilityRef = useRef(null);
   const templateSelectorRef = useRef(null);
   const querySelectorRef = useRef(null);
   const jsonButton = useRef(null);
@@ -162,13 +178,16 @@ export default function GridView() {
   // redux global state
   const dispatch = useDispatch();
   const gridColumns = useSelector((state) => state.gridColumns);
+  const loadingIndicator = useSelector((state) => state.loadingIndicator);
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const objectOptions = useSelector((state) => state.objectOptions);
   const queryColumns = useSelector((state) => state.queryColumns);
   const queryOptions = useSelector((state) => state.queryOptions);
   const queryPanelVisible = useSelector((state) => state.queryPanelVisible);
   const queryRule = useSelector((state) => state.queryRule);
+  const relationPreferences = useSelector((state) => state.relationPreferences);
   const selectedObject = useSelector((state) => state.selectedObject);
+  // const selectedGridRow = useSelector((state) => state.selectedGridRow);
   const selectedTemplate = useSelector((state) => state.selectedTemplate);
   const selectedQuery = useSelector((state) => state.selectedQuery);
   const templateOptions = useSelector((state) => state.templateOptions);
@@ -176,8 +195,17 @@ export default function GridView() {
   const userInfo = useSelector((state) => state.userInfo);
 
   // local state values
-  const [queryVisible, setQueryVisible] = useState(true);
+  const [queryVisible, setQueryVisible] = useState(false);
   const [queryRuleText, setQueryRuleText] = useState();
+  const selectedGridRow = useRef(null);
+
+  // template form
+  const [templateFormHeader, setTemplateFormHeader] = useState("");
+  const [templateFormFields, setTemplateFormFields] = useState([]);
+  const [templateFormData, setTemplateFormData] = useState([]);
+  const [templateFormOpen, setTemplateFormOpen] = useState(false);
+  const templateNameInput = useRef("");
+  const templateVisibility = useRef(false);
 
   // QueryBuilder
   const [queryContentRows, setQueryContentRows] = useState(5);
@@ -198,6 +226,16 @@ export default function GridView() {
     []
   );
 
+  const autoGroupColumnDef = useMemo(() => {
+    return {
+      minWidth: 220,
+      cellRendererParams: {
+        suppressCount: false,
+        checkbox: true,
+      },
+    };
+  }, []);
+
   // get org objects after user login
   useEffect(() => {
     const loadInitialData = async () => {
@@ -205,7 +243,7 @@ export default function GridView() {
         return;
       }
 
-      setLoading(true);
+      setLoadingIndicator(true);
       const result = await gf.getObjectOptions(userInfo);
 
       if (result.status === "error") {
@@ -241,7 +279,7 @@ export default function GridView() {
       // set the selectedObject
       dispatch(setSelectedObject(selectedObj));
 
-      setLoading(false);
+      setLoadingIndicator(false);
     };
 
     loadInitialData();
@@ -254,6 +292,8 @@ export default function GridView() {
       2 - load the template options
       3 - load the query options
       4 - set selected template & query based on preferences or defaults
+      5 - get the relationship preferences
+      6 - create the subviews based on user relationship preferences
     */
 
     const objChanged = async () => {
@@ -285,16 +325,19 @@ export default function GridView() {
         if (hasMetadata === undefined) {
           // store object metadata in global state
           const objMetadata = metadataResult.records;
-          dispatch(
-            addMetadata({
-              objName: selectedObject.id,
-              metadata: metadataResult.records,
-            })
-          );
+
+          const newObjMetadata = {
+            objName: selectedObject.id,
+            metadata: objMetadata,
+          };
+
+          const newMetadata = [...objectMetadata, newObjMetadata];
+
+          dispatch(addMetadata(newObjMetadata));
         }
 
-        // get template options
-        const templateResult = await gf.getTemplateOptions(
+        // get templates for selected object
+        const templateResult = await gf.getTemplateRecords(
           selectedObject.id,
           userInfo
         );
@@ -461,6 +504,69 @@ export default function GridView() {
           // use this query
           dispatch(setSelectedTemplate(queryOption));
         }
+
+        // create the sub views
+
+        const result = await gf.getRelationshipPreferences(userInfo);
+        if (result.status === "error") {
+          throw new Error(result.errorMessage);
+        }
+
+        const relPreferences = result.records;
+
+        if (relPreferences.length === 1) {
+          const allObjPrefs = relPreferences[0].preferences; // array
+
+          // find the relationship preferences for the selected object
+          const objRelPrefs = allObjPrefs.find(
+            (p) => p.object === selectedObject.id
+          );
+          const prefs = objRelPrefs.relations;
+
+          // get metadata if needed
+          prefs.forEach((p) => {
+            // get metadata if needed
+            gf.getObjectMetadata(p.obj, userInfo, objectMetadata)
+              .then((res) => {
+                if (res.status === "error") {
+                  throw new Error(
+                    "Error retrieving metadata for grid relationships"
+                  );
+                }
+
+                const objMetadata = res.records;
+
+                const hasMetadata = objectMetadata.find(
+                  (f) => f.objName === p.obj
+                );
+
+                if (hasMetadata === undefined) {
+                  const newObjMetadata = {
+                    objName: p.obj,
+                    metadata: objMetadata,
+                  };
+
+                  dispatch(addMetadata(newObjMetadata));
+                }
+              })
+              .catch((error) => {
+                // notify user of error
+                const snackOptions = {
+                  variant: "error",
+                  autoHideDuration: 5000,
+                  anchorOrigin: {
+                    vertical: "top",
+                    horizontal: "right",
+                  },
+                  TransitionComponent: Slide,
+                };
+
+                const key = enqueueSnackbar(error.message, snackOptions);
+              });
+          });
+
+          dispatch(setRelationPreferences(result.records[0].preferences));
+        }
       } catch (error) {
         // log error and notify user
         console.log(`useSelectedObjectChanged() - ${error.message}`);
@@ -518,7 +624,6 @@ export default function GridView() {
           ...gf.compareArrays(gridColumns, gridCols),
         ];
 
-        // store the grid columns if they changed
         if (difference.length > 0) {
           setColumnDefs(gridCols);
         }
@@ -595,13 +700,13 @@ export default function GridView() {
 
       console.log("GridView() - Executing selectedQueryChanged");
 
-      // setLoading(false);
+      // setLoadingIndicator(false);
       // return;
 
       const executeQueryResult = await runQuery();
 
       if (executeQueryResult === undefined) {
-        setLoading = false;
+        setLoadingIndicator = false;
         return;
       }
 
@@ -614,7 +719,7 @@ export default function GridView() {
         //   true
         // );
         console.log(executeQueryResult.errorMessage);
-        setLoading(false);
+        setLoadingIndicator(false);
         return;
       }
 
@@ -629,7 +734,7 @@ export default function GridView() {
 
       // update grid row state
       setRowData(queryData);
-      setLoading(false);
+      setLoadingIndicator(false);
     };
 
     queryChanged();
@@ -1039,7 +1144,7 @@ export default function GridView() {
   }
 
   async function runQuery() {
-    setLoading(true);
+    setLoadingIndicator(true);
     const query = queryBuilderRef.current.getRules();
     const ruleStr = queryBuilderRef.current.getSqlFromRules(query);
 
@@ -1074,7 +1179,7 @@ export default function GridView() {
       //   true
       // );
       console.log(executeQueryResult.errorMessage);
-      setLoading(false);
+      setLoadingIndicator(false);
       return;
     }
 
@@ -1089,13 +1194,490 @@ export default function GridView() {
 
     // update grid row state
     setRowData(queryData);
-    setLoading(false);
+    setLoadingIndicator(false);
+  }
+
+  // TEMPLATE FUNCTIONS
+
+  function TemplateGridRecs() {
+    // used in save template dialog
+    // checkbox value is false for non-admin users
+    let checkboxVal = false;
+
+    // enable the Public/Private checkbox for admins
+    let disableCheckbox = true;
+    if (userInfo.profileName === "System Administrator") {
+      disableCheckbox = false;
+    }
+
+    templateNameInput.current = selectedTemplate.label;
+
+    return (
+      <Box
+        className='ag-theme-alpine'
+        sx={{
+          width: 800,
+          height: 400,
+          mt: 2,
+        }}
+      >
+        <Stack direction='row'>
+          <TextField
+            sx={{
+              mb: 2,
+              width: 300,
+            }}
+            id='templateNameInput'
+            label='Template Name'
+            variant='standard'
+            defaultValue={templateNameInput.current}
+            size='small'
+            required
+            onChange={(e) => {
+              templateNameInput.current = e.target.value;
+            }}
+          />
+          <FormControlLabel
+            control={<Checkbox size='small' />}
+            label='Public'
+            ref={templateVisibilityRef}
+            sx={{
+              ml: 4,
+            }}
+            disabled={disableCheckbox}
+            onChange={(e) => {
+              // store value in useRef - needed when creating new templates
+              templateVisibility.current = e.target.checked;
+            }}
+          />
+        </Stack>
+
+        <AgGridReact
+          animateRows={true}
+          columnDefs={templateFormFields}
+          defaultColDef={defaultColDef}
+          ref={saveTemplateGridRef}
+          rowData={templateFormData}
+        ></AgGridReact>
+      </Box>
+    );
+  }
+
+  async function onSaveTemplateClose(args) {
+    setTemplateFormOpen(false);
+  }
+
+  async function onSaveTemplateForm(args) {
+    try {
+      const { api, columnApi } = saveTemplateGridRef.current;
+
+      const templateName = templateNameInput.current;
+
+      if (templateName === "") {
+        // prompt user for template name
+        const snackOptions = {
+          variant: "error",
+          autoHideDuration: 5000,
+          anchorOrigin: {
+            vertical: "top",
+            horizontal: "right",
+          },
+          TransitionComponent: Slide,
+        };
+
+        const key = enqueueSnackbar(
+          "Please enter a template name",
+          snackOptions
+        );
+
+        return;
+      }
+
+      // get current template owner
+      const templateUrl = "/postgres/knexSelect";
+      const templateResult = await gf.getTemplate(
+        selectedTemplate.id,
+        userInfo
+      );
+      if (templateResult.status !== "ok") {
+        throw new Error(
+          `onSaveTemplateForm() - ${templateResult.errorMessage}`
+        );
+      }
+
+      // always returns 1 record
+      const templateRec = templateResult.records[0];
+
+      /* template rules order
+
+        1 - non-admin users can only create private templates
+
+        2 - only the owner of the template can update it
+        
+        3 - if the templateInputName is different from the selectedTemplate name
+        then create a new template, else update existing template
+
+        4 - if a non-admin user is not the owner of the template, then
+        create a private template
+
+        5 - if an admin user is not the owner of the template, then create
+        a new template which has visibility determined by the public checkbox.
+        the public checkbox is enabled for sys admins only
+
+      */
+
+      if (
+        selectedTemplate.label !== templateNameInput.current ||
+        templateRec.owner !== userInfo.userEmail
+      ) {
+        // create a new template
+
+        const tmpResult = await gf.createTemplate(
+          templateName,
+          selectedObject,
+          templateVisibility.current,
+          userInfo
+        );
+
+        if (tmpResult.status === "error") {
+          throw new Error("Error creating template");
+        }
+
+        const newTemplate = tmpResult.records[0];
+        const newTemplateId = newTemplate.id;
+
+        // get the template recs from the grid
+        const templateRecs = saveTemplateGridRef.current.props.rowData;
+
+        // change templateid to the new value
+        templateRecs.forEach((t) => {
+          t.templateid = newTemplateId;
+        });
+
+        const insertUrl = "/postgres/knexInsert";
+
+        const insertPayload = {
+          table: "template_field",
+          values: templateRecs,
+          key: "id",
+        };
+
+        const insertResponse = await fetch(insertUrl, {
+          method: "post",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(insertPayload),
+        });
+
+        if (!insertResponse.ok) {
+          throw new Error(
+            `onSaveTemplateForm() - error inserting template fields`
+          );
+        }
+
+        let insertResult = await insertResponse.json();
+
+        // adds the template to the grid template selector options
+        let templateOps = [...templateOptions];
+        const newTemplateOption = {
+          id: newTemplate.id,
+          label: newTemplate.template_name,
+        };
+        templateOps.push(newTemplateOption);
+        dispatch(setTemplateOptions(templateOps));
+
+        // select the new template option
+        dispatch(setSelectedTemplate(newTemplateOption));
+      } else {
+        // update existing template
+
+        // delete existing template fields
+        const delResult = await gf.deleteTemplateFields(selectedTemplate);
+
+        if (delResult.status !== "ok") {
+          throw new Error(
+            "onSaveTemplateForm() - error deleting template fields"
+          );
+        }
+
+        const deletedRecs = delResult.records;
+
+        // get the template recs from the grid
+        const templateRecs = saveTemplateGridRef.current.props.rowData;
+
+        const insertUrl = "/postgres/knexInsert";
+
+        const insertPayload = {
+          table: "template_field",
+          values: templateRecs,
+          key: "id",
+        };
+
+        const insertResponse = await fetch(insertUrl, {
+          method: "post",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(insertPayload),
+        });
+
+        if (!insertResponse.ok) {
+          throw new Error(
+            `onSaveTemplateForm() - error inserting template fields`
+          );
+        }
+
+        let insertResult = await insertResponse.json();
+
+        // refresh the template
+
+        // get the template fields for selected template
+        const templateFieldResult = await gf.getTemplateFields(
+          selectedTemplate
+        );
+
+        if (templateFieldResult.status === "error") {
+          throw new Error(
+            `onSaveTemplateForm() - ${templateFieldResult.errorMessage}`
+          );
+        }
+
+        const templateFieldData = templateFieldResult.records;
+
+        // create the grid columns
+        const gridCols = await gf.createGridColumns(
+          selectedObject.id,
+          templateFieldData,
+          objectMetadata,
+          gridRef
+        );
+
+        setColumnDefs(gridCols);
+      }
+
+      // notify user
+      const snackOptions = {
+        variant: "success",
+        autoHideDuration: 3000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      const key = enqueueSnackbar("Template Saved", snackOptions);
+    } catch (error) {
+      console.log(error.message);
+
+      // notify user
+      const snackOptions = {
+        variant: "error",
+        autoHideDuration: 5000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      const key = enqueueSnackbar(error.message, snackOptions);
+    }
+
+    // set the selected query to the new value
+    setLoadingIndicator(false);
+
+    setTemplateFormOpen(false);
+  }
+
+  function onCloseTemplateForm() {
+    setTemplateFormOpen(false);
+  }
+
+  async function openSaveTemplateForm() {
+    // get the visible grid columns
+    const visibleColumns = [];
+    const gridColumns = gridRef.current.columnApi.getAllGridColumns();
+    gridColumns.forEach((g) => {
+      // get column def
+      const def = gridRef.current.columnApi.getColumn(g.colId);
+      if (
+        def.colDef.field &&
+        (def.visible || def.colDef.rowGroup || def.rowGroupActive)
+      ) {
+        visibleColumns.push(g);
+      }
+    });
+
+    // create the template records
+    const templateRecs = gf.createSaveTemplateRecords(
+      selectedObject.id,
+      visibleColumns,
+      objectMetadata,
+      selectedTemplate
+    );
+
+    // create the save template grid columns
+    const saveTemplateGridCols = [
+      {
+        field: "name",
+        headerName: "Name",
+        editable: false,
+        minWidth: 200,
+        pinned: "left",
+      },
+      {
+        field: "sort",
+        headerName: "Sort",
+        cellEditor: "agRichSelectCellEditor",
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: ["", "asc", "desc"],
+          cellHeight: 30,
+          searchDebounceDelay: 500,
+          formatValue: (value) => value.text,
+        },
+        editable: true,
+        filterParams: {
+          // can be 'windows' or 'mac'
+          excelMode: "mac",
+        },
+        resizable: false,
+        width: 125,
+      },
+      {
+        field: "split",
+        headerName: "Split",
+        cellRenderer: AgGridCheckbox,
+        editable: true,
+        filterParams: {
+          excelMode: "mac",
+        },
+        resizable: false,
+        width: 125,
+      },
+      {
+        field: "group",
+        headerName: "Group",
+        cellRenderer: AgGridCheckbox,
+        editable: true,
+        filterParams: {
+          excelMode: "mac",
+        },
+        resizable: false,
+        width: 125,
+      },
+      {
+        field: "aggregation",
+        headerName: "Agg Func",
+        cellEditor: "agRichSelectCellEditor",
+        cellEditorPopup: true,
+        cellEditorParams: {
+          values: ["", "sum", "min", "max", "avg", "count"],
+          cellHeight: 30,
+          searchDebounceDelay: 500,
+          formatValue: (value) => value.text,
+        },
+        editable: true,
+        filterParams: {
+          // can be 'windows' or 'mac'
+          excelMode: "mac",
+        },
+        resizable: false,
+        width: 150,
+      },
+      {
+        field: "sort_index",
+        headerName: "Sort Index",
+        hide: true,
+        resizable: false,
+        width: 150,
+      },
+      {
+        field: "filter",
+        headerName: "Filter",
+        cellRenderer: AgGridCheckbox,
+        editable: true,
+        filterParams: {
+          excelMode: "mac",
+        },
+        hide: true,
+        resizable: false,
+        width: 100,
+      },
+      {
+        field: "column_order",
+        headerName: "Column Order",
+        editable: false,
+        hide: true,
+        resizable: false,
+        minWidth: 150,
+      },
+      {
+        field: "templateid",
+        headerName: "Template Id",
+        editable: false,
+        hide: true,
+        resizable: false,
+        minWidth: 100,
+      },
+      {
+        field: "datatype",
+        headerName: "Data Type",
+        editable: false,
+        hide: true,
+        resizable: false,
+        minWidth: 150,
+      },
+    ];
+
+    // opens the save template dialog form
+    setTemplateFormFields(saveTemplateGridCols);
+    setTemplateFormData(templateRecs);
+    setTemplateFormHeader("Save Template");
+    setTemplateFormOpen(true);
+  }
+
+  function SaveTemplateDialog() {
+    return (
+      <Dialog open={templateFormOpen} fullWidth={true} maxWidth='md'>
+        <DialogTitle>Save Tempate</DialogTitle>
+        <DialogContent>
+          {/* <DialogContentText>Select template configuration</DialogContentText> */}
+          <TemplateGridRecs />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onCloseTemplateForm}>Cancel</Button>
+          <Button onClick={onSaveTemplateForm}>Save</Button>
+        </DialogActions>
+      </Dialog>
+    );
   }
 
   async function saveTemplate() {
     // called from Grid toolbar
+
+    /* template rules order
+
+        1 - non-admin users can only create private templates
+
+        2 - only the owner of the template can update it
+        
+        3 - if the templateInputName is different from the selectedTemplate name
+        then create a new template, else update existing template
+
+        4 - if a non-admin user is not the owner of the template, then
+        create a private template
+
+        5 - if an admin user is not the owner of the template, then create
+        a new template which has visibility determined by the public checkbox in
+        the save template dialog.  the public checkbox is enabled for sys admins only
+
+    */
+
     try {
-      setLoading(true);
+      // setLoadingIndicator(true);
       // get the selected template and determine if the current user is the owner
       const templateUrl = "/postgres/knexSelect";
       const templateResult = await gf.getTemplate(
@@ -1114,153 +1696,18 @@ export default function GridView() {
       let templateName = "";
       if (templateRec.owner !== userInfo.userEmail) {
         // save as private template
-        // prompt user for name
-        setOpenSaveTemplateDialog(true);
+        const tName = (templateNameInput.current = "");
+        openSaveTemplateForm(tName);
         return;
       }
 
-      // user is owner of the template, so
-      // update the template fields
+      // user is owner of template
+      const tName = (templateNameInput.current = selectedTemplate);
+      openSaveTemplateForm(tName);
 
-      // get the visible grid columns
-      const visibleColumns = [];
-      const gridColumns = gridRef.current.columnApi.getAllGridColumns();
-      gridColumns.forEach((g) => {
-        // get column def
-        const def = gridRef.current.columnApi.getColumn(g.colId);
-        if (def.visible) {
-          visibleColumns.push(g);
-        }
-      });
-
-      // get the selected template fields
-      const templateFieldResult = await gf.getTemplateFields(selectedTemplate);
-
-      if (templateFieldResult.status === "error") {
-        throw new Error(templateFieldResult.errorMessage);
-      }
-
-      const templateFields = templateFieldResult.records;
-
-      if (templateFields.length > 0) {
-        // delete existing template fields
-        const deleteIds = [];
-        templateFields.forEach((t) => {
-          deleteIds.push(t.id);
-        });
-
-        const deleteResult = await gf.deleteTemplateFields(deleteIds);
-
-        if (deleteResult.status === "error") {
-          throw new Error(deleteResult.errorMessage);
-        }
-      }
-
-      // get the field metadata
-      const objMetadata = objectMetadata.find(
-        (m) => m.objName === selectedObject.id
-      );
-      const metadataFields = objMetadata.metadata.fields;
-
-      // create template_field records
-      const tfRecs = [];
-      visibleColumns.forEach((c, index) => {
-        const metadataField = metadataFields.find(
-          (f) => f.name === c.colDef.field
-        );
-        const fieldDataType = metadataField.dataType;
-
-        const newRec = {
-          templateid: selectedTemplate.id,
-          name: c.colDef.field,
-          datatype: fieldDataType,
-          sort: "",
-          filter: "",
-          aggregation: "",
-          split: false,
-          formula: "",
-          group: false,
-          group_field: "",
-          column_order: index,
-        };
-
-        tfRecs.push(newRec);
-      });
-
-      const insertUrl = "/postgres/knexInsert";
-
-      // const insertColumns = [
-      //   "id",
-      //   "templateid",
-      //   "name",
-      //   "datatype",
-      //   "sort",
-      //   "filter",
-      //   "aggregation",
-      //   "split",
-      //   "formula",
-      //   "group",
-      //   "group_field",
-      //   "column_order",
-      // ];
-
-      // const insertValues = {
-      //   id: selectedTemplate.id,
-      //   name: selectedTemplate.label,
-      //   owner: userInfo.userEmail,
-      //   object: selectedObject.id,
-      //   is_public: selectedTemplate.is_public,
-      //   default: selectedTemplate.default,
-      //   is_active: true,
-      //   orgid: userInfo.organizationId,
-      // };
-
-      const insertPayload = {
-        table: "template_field",
-        // columns: insertColumns,
-        values: tfRecs,
-      };
-
-      const insertResponse = await fetch(insertUrl, {
-        method: "post",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(insertPayload),
-      });
-
-      if (!insertResponse.ok) {
-        throw new Error(`gridView-saveTemplate() - ${insertResponse.message}`);
-      }
-
-      let insertResult = await insertResponse.json();
-
-      // notify user
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      const key = enqueueSnackbar("Template Saved", snackOptions);
-
-      // adds the template to the grid template selector options
-      // let queryOps = [...queryOptions];
-      // const newOpt = {
-      //   id: newQuery.name,
-      //   label: newQuery.name,
-      // };
-      // queryOps.push(newOpt);
-      // dispatch(setQueryOptions(queryOps));
-
-      // set the selected query to the new value
-      setLoading(false);
+      return;
     } catch (error) {
-      setLoading(false);
+      setLoadingIndicator(false);
       console.log(error.message);
       return;
     }
@@ -1268,7 +1715,7 @@ export default function GridView() {
 
   async function saveQuery() {
     try {
-      setLoading(true);
+      setLoadingIndicator(true);
       // get the query record and determine if the current user is the owner
       const queryUrl = "/postgres/knexSelect";
       const queryResult = await gf.getQuery(selectedQuery.id, userInfo);
@@ -1317,6 +1764,7 @@ export default function GridView() {
         table: "query2",
         columns: insertColumns,
         values: insertValues,
+        key: "id",
       };
 
       const insertResponse = await fetch(insertUrl, {
@@ -1367,9 +1815,9 @@ export default function GridView() {
       // dispatch(setQueryOptions(queryOps));
 
       // set the selected query to the new value
-      setLoading(false);
+      setLoadingIndicator(false);
     } catch (error) {
-      setLoading(false);
+      setLoadingIndicator(false);
       console.log(error.message);
       return;
     }
@@ -1423,6 +1871,10 @@ export default function GridView() {
     const newValue = params.newValue;
   }
 
+  function gridRowClicked(params) {
+    selectedGridRow.current = params.data.Id;
+  }
+
   // The client has set new data into the grid using api.setRowData() or by
   // changing the rowData bound property.
   function gridRowDataChanged(params) {
@@ -1435,6 +1887,8 @@ export default function GridView() {
     const columnApi = params.columnApi;
     const data = params.data;
     const rowIndex = params.rowIndex;
+
+    selectedGridRow.current = params.data[0].Id;
   }
 
   // A cell's value within a row has changed. This event corresponds to Full Row Editing only.
@@ -1448,6 +1902,15 @@ export default function GridView() {
   function gridSelectionChanged(params) {
     const api = params.api;
     const columnApi = params.columnApi;
+
+    return;
+
+    const id = params.data.id;
+
+    const rowNode = api.getRowNode(id);
+
+    // resends row data to subview
+    rowNode.setRowData(params.data);
   }
 
   function expandOrCollapseAll(params) {
@@ -1458,12 +1921,44 @@ export default function GridView() {
   const defaultColDef = useMemo(() => {
     return {
       editable: true,
-      sortable: true,
+      enableValue: true, // allow every column to be aggregated
+      enableRowGroup: true, // allow every column to be grouped
+      enablePivot: true, // allow every column to be pivoted
+      filter: "agMultiColumnFilter",
+      minWidth: 100,
       resizable: true,
-      filter: true,
-      minWidth: 150,
+      sortable: true,
+      // filterParams: {
+      //   buttons: ["apply", "clear"],
+      // },
     };
   }, []);
+
+  const columnTypes = {
+    dateColumn: {
+      // filter: "agMultiColumnFilter",
+      filterParams: {
+        // provide comparator function
+        comparator: (dateFromFilter, cellValue) => {
+          // In the example application, dates are stored as dd/mm/yyyy
+          // We create a Date object for comparison against the filter date
+          const dateParts = cellValue.split("/");
+          const day = Number(dateParts[0]);
+          const month = Number(dateParts[1]) - 1;
+          const year = Number(dateParts[2]);
+          const cellDate = new Date(year, month, day);
+          // Now that both parameters are Date objects, we can compare
+          if (cellDate < dateFromFilter) {
+            return -1;
+          } else if (cellDate > dateFromFilter) {
+            return 1;
+          } else {
+            return 0;
+          }
+        },
+      },
+    },
+  };
 
   function onFirstDataRendered(params) {
     const allColumnIds = [];
@@ -1533,6 +2028,7 @@ export default function GridView() {
       table: "query2",
       columns: insertColumns,
       values: insertValues,
+      key: "id",
     };
 
     const insertResponse = await fetch(insertUrl, {
@@ -1608,6 +2104,7 @@ export default function GridView() {
       table: "template",
       columns: insertColumns,
       values: insertValues,
+      key: "id",
     };
 
     const insertResponse = await fetch(insertUrl, {
@@ -1697,11 +2194,94 @@ export default function GridView() {
   }
 
   console.log("Rendering View");
-  console.log(queryRule);
+
+  const sideBar = useMemo(() => {
+    return {
+      toolPanels: [
+        {
+          id: "columns",
+          labelDefault: "Columns",
+          labelKey: "columns",
+          iconKey: "columns",
+          toolPanel: "agColumnsToolPanel",
+        },
+        {
+          id: "gridRelationships",
+          labelDefault: "Relationships",
+          labelKey: "relationships",
+          iconKey: "custom-stats",
+          width: 385,
+          toolPanel: GridRelationshipsPanel,
+          toolPanelParams: {
+            selectedObject: selectedObject,
+          },
+        },
+      ],
+    };
+  }, []);
+
+  const icons = useMemo(() => {
+    return {
+      "custom-stats": '<span class="ag-icon ag-icon-custom-stats"></span>',
+    };
+  }, []);
+
+  const getVisibilityStyle = (hiddenCondition) => {
+    if (hiddenCondition) {
+      return {
+        visibility: "hidden",
+        height: 0,
+      };
+    }
+    return {
+      visibility: "visible",
+      height: "inherit",
+    };
+  };
+
+  // SUBVIEWS
+  const detailCellRenderer = useMemo(() => {
+    return DetailCellRenderer;
+  }, []);
+
+  const detailCellRendererParams = {
+    masterObject: selectedObject,
+    masterGridRef: gridRef.current,
+    masterGridRowId: selectedGridRow.current,
+    // relationPreferences: relationPreferences,
+  };
+
+  // use application id as the grid row id
+  const getRowId = useCallback((params) => params.data.id, []);
+
+  const userRelations = async function () {
+    try {
+      const result = await gf.getRelationshipPreferences(userInfo);
+
+      if (result.status === "error") {
+        throw new Error("Error retrieving user relationship preferences");
+      }
+
+      return result.records;
+    } catch (error) {
+      // notify user of error
+      const snackOptions = {
+        variant: "error",
+        autoHideDuration: 5000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      const key = enqueueSnackbar(error.message, snackOptions);
+    }
+  };
 
   return (
     <LoadingOverlay
-      active={loading}
+      active={loadingIndicator}
       spinner={<GridLoader />}
       styles={{
         overlay: (base) => ({
@@ -1751,30 +2331,7 @@ export default function GridView() {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={openSaveTemplateDialog} onClose={handleSaveTemplateClose}>
-          <DialogTitle>Save Tempate</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Only template owner can make changes to this template. Enter a
-              template name to save as a private template.
-            </DialogContentText>
-            <TextField
-              ref={saveTemplateTextField}
-              autoFocus
-              margin='dense'
-              id='name'
-              label='Name'
-              type='text'
-              fullWidth
-              variant='standard'
-              onChange={setTemplateTextValue}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCancelTemplateClose}>Cancel</Button>
-            <Button onClick={handleSaveTemplateClose}>Save</Button>
-          </DialogActions>
-        </Dialog>
+        <SaveTemplateDialog />
 
         {/* object, template & query selectors */}
         <Toolbar
@@ -1795,7 +2352,7 @@ export default function GridView() {
               <TextField {...params} label='Org Objects' variant='standard' />
             )}
             onChange={async (event, newValue) => {
-              setLoading(true);
+              setLoadingIndicator(true);
 
               console.log("Selected object changed");
 
@@ -1821,7 +2378,7 @@ export default function GridView() {
               dispatch(setSelectedTemplate(newValue));
               return;
             }}
-            sx={{ ml: 5, width: 225 }}
+            sx={{ ml: 5, width: 250 }}
           />
 
           <Autocomplete
@@ -1838,7 +2395,7 @@ export default function GridView() {
               dispatch(setSelectedQuery(newValue));
               return;
             }}
-            sx={{ ml: 5, width: 225 }}
+            sx={{ ml: 5, width: 250 }}
           />
         </Toolbar>
 
@@ -2105,6 +2662,9 @@ export default function GridView() {
                     const objMetadata = objectMetadata.find(
                       (m) => m.objName === selectedObject.id
                     );
+                    if (objMetadata === undefined) {
+                      const a = 1;
+                    }
                     const metadataFields = objMetadata.metadata.fields;
                     const metadataField = metadataFields.find(
                       (f) => f.name === item.field
@@ -2491,16 +3051,6 @@ export default function GridView() {
                           />
                         );
                       }
-                      // default: {
-                      //   return (
-                      //     <ColumnDirective
-                      //       key={item.name}
-                      //       field={item.field}
-                      //       label={item.label}
-                      //       type={item.type}
-                      //     />
-                      //   );
-                      // }
                     }
                   })}
                 </ColumnsDirective>
@@ -2578,19 +3128,32 @@ export default function GridView() {
         <div style={containerStyle}>
           <div style={gridStyle} className='ag-theme-alpine'>
             <AgGridReact
+              animateRows={true}
+              autoGroupColumnDef={autoGroupColumnDef}
               defaultColDef={defaultColDef}
+              detailCellRenderer={DetailCellRenderer}
+              detailCellRendererParams={detailCellRendererParams}
+              detailRowHeight={500}
               columnDefs={columnDefs}
+              columnTypes={columnTypes}
               enableColResize='true'
+              getRowId={getRowId}
+              groupDisplayType={"singleColumn"}
+              masterDetail={true}
               onFirstDataRendered={onFirstDataRendered}
               onGridReady={onGridReady}
               onCellValueChanged={gridCellValueChanged}
               onRowDataChanged={gridRowDataChanged}
+              onRowClicked={gridRowClicked}
               onRowSelected={gridRowSelected}
               onSelectionChanged={gridSelectionChanged}
               ref={gridRef}
               rowData={rowData}
               rowBuffer={100}
+              rowGroupPanelShow={"always"}
               rowSelection='multiple'
+              showOpenedGroup={true}
+              sideBar={sideBar}
               suppressColumnVirtualisation={true}
             ></AgGridReact>
           </div>

@@ -1,7 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 // sets selected app state
-const initialState = true;
+const initialState = false;
 export const queryBuilderVisabilitySlice = createSlice({
   name: "queryBuilderVisible",
   initialState,
