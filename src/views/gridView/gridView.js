@@ -999,6 +999,8 @@ export default function GridView() {
           `Running QueryBuilder useEffect for query ${selectedQuery.id}`
         );
 
+        prevSelectedQuery.current = { ...selectedQuery };
+
         // get query from database
         const queryResult = await gf.getSelectedQuery(selectedQuery, userInfo);
 
