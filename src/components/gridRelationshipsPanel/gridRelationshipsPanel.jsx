@@ -58,14 +58,10 @@ export default (props) => {
   // local object references
   const relationshipGridRef = useRef(null);
 
+  // local state
   const [colDefs, setColDefs] = useState([]);
   const [gridData, setGridData] = useState([]);
-
   const selectedObject = useSelector((state) => state.selectedObject);
-
-  if (selectedObject) {
-    console.log(selectedObject.label);
-  }
 
   const dispatch = useDispatch();
 
@@ -163,11 +159,13 @@ export default (props) => {
           // get the preferences for the selected object
           const objPref = allPrefs.find((f) => f.object === selectedObject.id);
 
-          objPref.relations.forEach((r) => {
-            // find the relation in the relation grid
-            const rec = relArray.find((f) => f.id === r.obj);
-            rec.selected = true;
-          });
+          if (objPref) {
+            objPref.relations.forEach((r) => {
+              // find the relation in the relation grid
+              const rec = relArray.find((f) => f.id === r.obj);
+              rec.selected = true;
+            });
+          }
         }
 
         // supply data to the grid
@@ -241,7 +239,6 @@ export default (props) => {
           animateRows={true}
           columnDefs={colDefs}
           enableColResize='false'
-          //   onCellValueChanged={gridCellValueChanged}
           ref={relationshipGridRef}
           rowData={gridData}
         ></AgGridReact>
@@ -259,12 +256,12 @@ export default (props) => {
             width: 150,
           }}
           onClick={async (e) => {
-            // get selected relations
             const visibleColumns = [];
             const selectedRelations = [];
 
-            const rec = null;
+            let rec = null;
 
+            // get selected relations
             relationshipGridRef.current.api.forEachNode((n) => {
               rec = n.data;
               if (rec.selected) {
@@ -285,6 +282,7 @@ export default (props) => {
                       (f) => f.objName === rec
                     );
 
+                    // add metadata
                     if (hasMetadata === undefined) {
                       const newObjMetadata = {
                         objName: selectedObject.id,
@@ -328,6 +326,7 @@ export default (props) => {
                 throw new Error("Error retrieving relationship preferences");
               }
 
+              // no preferences found
               if (relResult.records.length === 0) {
                 const objRelations = [];
 

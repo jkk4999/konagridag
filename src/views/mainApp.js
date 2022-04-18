@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-// state hooks
+// global
 
 import { setUserInfo } from "../features/userInfoSlice";
 import { setSelectedApp } from "../features/selectedAppSlice";

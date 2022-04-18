@@ -31,7 +31,7 @@ class SelectTemplate extends React.Component {
   }
   render() {
     const args = this.state;
-    const selectedObject = args.selectedObject.id;
+    const selectedObject = args.selectedObject ? args.selectedObject.id : null;
     const queryField = args.field;
     const objectMetadata = args.objectMetadata;
     const objMetadata = objectMetadata.find(

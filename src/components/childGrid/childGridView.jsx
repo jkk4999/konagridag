@@ -29,9 +29,6 @@ import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 
-// React Spinner
-import LoadingOverlay from "react-loading-overlay-ts";
-
 // Mui
 import { makeStyles } from "@mui/styles";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -42,16 +39,12 @@ import { Checkbox } from "@mui/material";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import { FormControlLabel } from "@mui/material";
-import { Select } from "@mui/material/Select";
 import { Stack } from "@mui/material";
-import { styled, useTheme } from "@mui/material/styles";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Toolbar from "@mui/material/Toolbar";
-import { Typography } from "@mui/material/styles/createTypography";
 
 // Snackbar
 import { useSnackbar } from "notistack";
@@ -59,17 +52,14 @@ import { Slide } from "@mui/material";
 
 // MUI icons
 import AddOutlinedIcon from "@mui/icons-material/Add";
-import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
+// import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
-import DoubleArrowOutlinedIcon from "@mui/icons-material/DoubleArrowOutlined";
+// import DoubleArrowOutlinedIcon from "@mui/icons-material/DoubleArrowOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
-import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+// import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import SaveTemplateIcon from "@mui/icons-material/ViewColumn";
-
-import { getThemeProps } from "@mui/styles";
-import { setGridColumns } from "../../features/gridColumnsSlice";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -86,8 +76,6 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function ChildGridView(props) {
-  const loadingIndicator = useSelector((state) => state.loadingIndicator);
-
   const { masterObject, childObject, masterGridRef, selectedGridRow } = props;
 
   // only allow 1 expanded row
@@ -102,20 +90,16 @@ function ChildGridView(props) {
   const classes = useStyles();
 
   // local state
-  const [colDefs, setColDefs] = useState([]);
-  const [rowData, setRowData] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [templateOptions, setTemplateOptions] = useState([]);
-  // const [loading, setLoading] = useState[false];
-
-  // previous state values
-  const prevViewState = useRef([]);
 
   // redux global state
   const dispatch = useDispatch();
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
   const gridViewState = useSelector((state) => state.childGridState);
+
+  // local state// previous state values
+  const prevViewState = useRef([]);
 
   // get the child grid state
   const viewState = gridViewState.find((s) => s.childGrid === childObject);
@@ -143,9 +127,6 @@ function ChildGridView(props) {
     () => ({ height: "90%", width: "95%", marginLeft: "10px" }),
     []
   );
-
-  // statically fix row height for all detail grids
-  const detailRowHeight = 500;
 
   // use application id as the grid row id
   const getRowId = useCallback((params) => params.data.id, []);
@@ -267,51 +248,193 @@ function ChildGridView(props) {
     setTemplateFormOpen(false);
   }
 
-  async function onSaveTemplateForm(args) {
-    try {
-      const { api, columnApi } = saveTemplateGridRef.current;
+  async function createNewTemplate(
+    templateName,
+    childObject,
+    templateVisibility,
+    userInfo,
+    viewState,
+    saveTemplateGridRef
+  ) {
+    const tmpResult = await gf.createTemplate(
+      templateName,
+      childObject,
+      templateVisibility.current,
+      userInfo
+    );
 
-      const templateName = templateNameInput.current;
+    if (tmpResult.status === "error") {
+      throw new Error(`Error creating template for ${childObject}`);
+    }
 
-      if (templateName === "") {
-        // prompt user for template name
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
+    let templateRec = tmpResult.records[0];
 
-        const key = enqueueSnackbar(
-          "Please enter a template name",
-          snackOptions
+    // adds the template to the grid template selector options
+    let templateOps = [];
+    if (viewState) {
+      templateOps = [...viewState.templateOptions];
+    }
+
+    let newTemplateOption = {
+      id: templateRec.id,
+      label: templateRec.template_name,
+    };
+
+    templateOps.push(newTemplateOption);
+
+    // delete existing template fields if exist
+    if (viewState && viewState.selectedTemplate) {
+      const delResult = await gf.deleteTemplateFields(
+        viewState.selectedTemplate
+      );
+
+      if (delResult.status !== "ok") {
+        throw new Error(
+          `Error deleting template fields for template ${templateName}`
         );
-
-        return;
       }
+    }
 
-      // get current template owner
-      let templateRec = null;
+    // get the template fields from the grid
+    const templateFieldRecs = saveTemplateGridRef.current.props.rowData;
 
-      if (viewState.selectedTemplate !== null) {
-        const templateUrl = "/postgres/knexSelect";
-        const templateResult = await gf.getTemplate(
-          viewState.selectedTemplate.id,
-          userInfo
-        );
+    // change templateid to the new value
+    templateFieldRecs.forEach((t) => {
+      t.templateid = t.id;
+    });
 
-        if (templateResult.status !== "ok") {
-          throw new Error(`Error retrieving template owner`);
+    // store the new template fields
+    const templateFieldUrl = "/postgres/knexInsert";
+
+    const templateFieldPayload = {
+      table: "template_field",
+      values: templateFieldRecs,
+      key: "id",
+    };
+
+    const templateFieldResponse = await fetch(templateFieldUrl, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(templateFieldPayload),
+    });
+
+    if (!templateFieldResponse.ok) {
+      throw new Error(
+        `Error inserting template fields for template ${templateName}`
+      );
+    }
+
+    // create a new view state
+    const newState = {
+      childGrid: childObject,
+      templateOptions: templateOps,
+      selectedTemplate: newTemplateOption,
+      // colDefs: viewState.colDefs,
+      rowData: () => {
+        if (viewState) {
+          return viewState.rowData;
         }
+      },
+    };
 
-        // always returns 1 record
-        templateRec = templateResult.records[0];
+    dispatch(addGridState(newState));
+
+    // notify user
+    const snackOptions = {
+      variant: "success",
+      autoHideDuration: 3000,
+      anchorOrigin: {
+        vertical: "top",
+        horizontal: "right",
+      },
+      TransitionComponent: Slide,
+    };
+
+    enqueueSnackbar("Template Saved", snackOptions);
+  }
+
+  async function updateExistingTemplate(
+    childObject,
+    viewState,
+    saveTemplateGridRef
+  ) {
+    // delete existing template fields if exist
+    if (viewState && viewState.selectedTemplate) {
+      const delResult = await gf.deleteTemplateFields(
+        viewState.selectedTemplate
+      );
+
+      if (delResult.status !== "ok") {
+        throw new Error(
+          `Error deleting template fields for template ${viewState.selectedTemplate.id}`
+        );
       }
+    }
 
-      /* template rules order
+    // get the template fields from the grid
+    const templateFieldRecs = saveTemplateGridRef.current.props.rowData;
+
+    // change templateid to the new value
+    templateFieldRecs.forEach((t) => {
+      t.templateid = t.id;
+    });
+
+    // store the new template fields
+    const templateFieldUrl = "/postgres/knexInsert";
+
+    const templateFieldPayload = {
+      table: "template_field",
+      values: templateFieldRecs,
+      key: "id",
+    };
+
+    const templateFieldResponse = await fetch(templateFieldUrl, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(templateFieldPayload),
+    });
+
+    if (!templateFieldResponse.ok) {
+      throw new Error(
+        `Error inserting template fields for template ${viewState.selectedTemplate.id}`
+      );
+    }
+
+    // update view state
+    const updateState = {
+      childGrid: childObject,
+      templateOptions: viewState.templateOptions,
+      selectedTemplate: viewState.selectedTemplate,
+      colDefs: [],
+      rowData: () => {
+        if (viewState) {
+          return viewState.rowData;
+        }
+      },
+    };
+
+    dispatch(updateGridState(updateState));
+
+    // notify user
+    const snackOptions = {
+      variant: "success",
+      autoHideDuration: 3000,
+      anchorOrigin: {
+        vertical: "top",
+        horizontal: "right",
+      },
+      TransitionComponent: Slide,
+    };
+
+    enqueueSnackbar("Template Saved", snackOptions);
+  }
+
+  async function onSaveTemplateForm(args) {
+    /* template rules order
 
         1 - non-admin users can only create private templates
 
@@ -327,162 +450,53 @@ function ChildGridView(props) {
         a new template which has visibility determined by the public checkbox.
         the public checkbox is enabled for sys admins only
 
-      */
+    */
+    try {
+      // const { api, columnApi } = saveTemplateGridRef.current;
+
+      const templateName = templateNameInput.current;
+
+      if (templateName === "") {
+        // prompt user for template name
+        const snackOptions = {
+          variant: "error",
+          autoHideDuration: 5000,
+          anchorOrigin: {
+            vertical: "top",
+            horizontal: "right",
+          },
+          TransitionComponent: Slide,
+        };
+
+        enqueueSnackbar("Please enter a template name", snackOptions);
+
+        return;
+      }
+
+      let templateRec = null;
 
       if (
-        viewState.selectedTemplate === null ||
-        templateRec === null ||
+        !viewState.selectedTemplate ||
         viewState.selectedTemplate.label !== templateNameInput.current ||
         templateRec.owner !== userInfo.userEmail
       ) {
-        // create a new template
-
-        const tmpResult = await gf.createTemplate(
+        /* create new template when:
+          no templates defined for this object or
+          user is not the owner of the template or
+          user has changed the template name
+        */
+        createNewTemplate(
           templateName,
           childObject,
-          templateVisibility.current,
-          userInfo
+          templateVisibility,
+          userInfo,
+          viewState,
+          saveTemplateGridRef
         );
-
-        if (tmpResult.status === "error") {
-          throw new Error(`Error creating template for ${childObject}`);
-        }
-
-        const newTemplate = tmpResult.records[0];
-        const newTemplateId = newTemplate.id;
-
-        // get the template recs from the grid
-        const templateRecs = saveTemplateGridRef.current.props.rowData;
-
-        // change templateid to the new value
-        templateRecs.forEach((t) => {
-          t.templateid = newTemplateId;
-        });
-
-        const insertUrl = "/postgres/knexInsert";
-
-        const insertPayload = {
-          table: "template_field",
-          values: templateRecs,
-          key: "id",
-        };
-
-        const insertResponse = await fetch(insertUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(insertPayload),
-        });
-
-        if (!insertResponse.ok) {
-          throw new Error(
-            `Error inserting template fields for template ${templateName}`
-          );
-        }
-
-        let insertResult = await insertResponse.json();
-
-        // adds the template to the grid template selector options
-        let templateOps = [...templateOptions];
-
-        const newTemplateOption = {
-          id: newTemplate.id,
-          label: newTemplate.template_name,
-        };
-
-        templateOps.push(newTemplateOption);
-
-        const newState = {
-          childGrid: childObject,
-          templateOptions: templateOps,
-          selectedTemplate: newTemplateOption,
-          colDefs: viewState.colDefs,
-          rowData: viewState.rowData,
-        };
-
-        dispatch(updateGridState(newState));
       } else {
         // update existing template
-
-        // delete existing template fields
-        const delResult = await gf.deleteTemplateFields(
-          viewState.selectedTemplate
-        );
-
-        if (delResult.status !== "ok") {
-          throw new Error(
-            `Error deleting template fields for template ${templateName}`
-          );
-        }
-
-        const deletedRecs = delResult.records;
-
-        // get the template recs from the grid
-        const templateRecs = saveTemplateGridRef.current.props.rowData;
-
-        const insertUrl = "/postgres/knexInsert";
-
-        const insertPayload = {
-          table: "template_field",
-          values: templateRecs,
-          key: "id",
-        };
-
-        const insertResponse = await fetch(insertUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(insertPayload),
-        });
-
-        if (!insertResponse.ok) {
-          throw new Error(
-            `Error inserting template fields for template ${templateName}`
-          );
-        }
-
-        let insertResult = await insertResponse.json();
-
-        // refresh the template
-
-        // get the template fields for selected template
-        const templateFieldResult = await gf.getTemplateFields(
-          viewState.selectedTemplate
-        );
-
-        if (templateFieldResult.status === "error") {
-          throw new Error(
-            `Error retrieving template fields for template ${templateName}`
-          );
-        }
-
-        const templateFieldData = templateFieldResult.records;
-
-        // create the grid columns
-        const gridCols = await gf.createGridColumns(
-          masterObject.id,
-          templateFieldData,
-          objectMetadata,
-          gridRef
-        );
-
-        setColDefs(gridCols);
+        updateExistingTemplate(childObject, viewState, saveTemplateGridRef);
       }
-
-      // notify user
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      const key = enqueueSnackbar("Template Saved", snackOptions);
     } catch (error) {
       console.log(error.message);
 
@@ -497,7 +511,7 @@ function ChildGridView(props) {
         TransitionComponent: Slide,
       };
 
-      const key = enqueueSnackbar(error.message, snackOptions);
+      enqueueSnackbar(error.message, snackOptions);
     }
 
     setTemplateFormOpen(false);
@@ -546,8 +560,6 @@ function ChildGridView(props) {
     try {
       // get the selected template and determine if the current user is the owner
       if (viewState.selectedTemplate) {
-        const templateUrl = "/postgres/knexSelect";
-
         const templateResult = await gf.getTemplate(
           viewState.selectedTemplate.id,
           userInfo
@@ -718,27 +730,30 @@ function ChildGridView(props) {
     }
   }
 
-  /*  
+  useEffect(() => {
+    /*  when no view state for this view exists
       1 - load the template options
       2 - set selected template based on preferences or defaults
-      3 - create the grid columns
-      4 - get the related records
   */
-  useEffect(() => {
-    const objChanged = async () => {
+
+    if (viewState !== undefined) {
+      return;
+    }
+
+    const configureGrid = async () => {
+      console.log(`Configuring child grid ${childObject}`);
+
       setLoadingIndicator(true);
 
-      let templateFields = [];
       let gridCols = [];
 
       // if viewState hasn't changed, do nothing
-      if (_.isEqual(viewState, prevViewState.current)) {
-        setLoadingIndicator(false);
-        return;
-      }
+      // if (_.isEqual(viewState, prevViewState.current)) {
+      //   setLoadingIndicator(false);
+      //   return;
+      // }
 
       // create the state
-
       const newState = {
         childGrid: childObject,
       };
@@ -843,14 +858,19 @@ function ChildGridView(props) {
           newState.selectedTemplate = tmpOptions[0];
         }
 
-        if (newState.selectedTemplate === undefined) {
-          // create default grid columns
+        if (tmpOptions.length === 0) {
+          // no templates defined for this object
 
-          gridCols = await gf.createDefaultGridColumns(
+          // create default grid columns
+          let defaultGridCols = await gf.createDefaultGridColumns(
             childObject,
             objectMetadata
           );
-        } else {
+
+          newState.colDefs = defaultGridCols;
+        }
+
+        if (newState.selectedTemplate) {
           const result = await gf.getTemplateFields(newState.selectedTemplate);
 
           if (result.status === "error") {
@@ -864,24 +884,9 @@ function ChildGridView(props) {
             objectMetadata,
             gridRef
           );
+
+          newState.colDefs = gridCols;
         }
-
-        newState.colDefs = gridCols;
-
-        // get the data
-        const whereClause = `${masterObject.id}Id = '${selectedGridRow.Id}'`;
-
-        const response = await gf.runQuery(childObject, whereClause);
-
-        if (response.status === "error") {
-          throw new Error(
-            `Error retrieving related records for ${childObject}`
-          );
-        }
-
-        const data = response.records[0];
-
-        newState.rowData = data;
 
         // store the view state
         prevViewState.current = { ...newState };
@@ -891,6 +896,7 @@ function ChildGridView(props) {
         dispatch(addGridState(newState));
       } catch (error) {
         setLoadingIndicator(false);
+
         // log error and notify user
         console.log(error.message);
 
@@ -905,21 +911,63 @@ function ChildGridView(props) {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(error.message, snackOptions);
+        enqueueSnackbar(error.message, snackOptions);
       }
     };
 
-    objChanged();
-  });
+    configureGrid();
+  }, [
+    viewState,
+    childObject,
+    dispatch,
+    objectMetadata,
+    userInfo,
+    enqueueSnackbar,
+  ]);
+
+  useEffect(() => {
+    // get the data when the selected row changes
+
+    const getData = async () => {
+      // if viewState hasn't changed, do nothing
+      if (_.isEqual(viewState, prevViewState.current)) {
+        setLoadingIndicator(false);
+        return;
+      }
+
+      // get the data
+      const whereClause = `${masterObject.id}Id = '${selectedGridRow.Id}'`;
+
+      const response = await gf.runQuery(childObject, whereClause);
+
+      if (response.status === "error") {
+        throw new Error(`Error retrieving related records for ${childObject}`);
+      }
+
+      const data = response.records[0];
+
+      setLoadingIndicator(false);
+
+      // update the view state
+      const newState = { ...viewState };
+      newState.rowData = data;
+      newState.selectedGridRow = selectedGridRow;
+      dispatch(addGridState(newState));
+
+      prevViewState.current = newState;
+    };
+
+    getData();
+  }, [selectedGridRow, childObject, dispatch, masterObject.id, viewState]);
 
   // compare arrays
-  function getDifference(array1, array2) {
-    return array1.filter((object1) => {
-      return !array2.some((object2) => {
-        return object1.id === object2.id;
-      });
-    });
-  }
+  // function getDifference(array1, array2) {
+  //   return array1.filter((object1) => {
+  //     return !array2.some((object2) => {
+  //       return object1.id === object2.id;
+  //     });
+  //   });
+  // }
 
   const autoGroupColumnDef = useMemo(() => {
     return {
@@ -1064,7 +1112,7 @@ function ChildGridView(props) {
             <TextField {...params} label='Templates' variant='standard' />
           )}
           onChange={async (event, newValue) => {
-            setSelectedTemplate = newValue;
+            setSelectedTemplate(newValue);
           }}
           sx={{ ml: 5, width: 350 }}
         />

@@ -709,15 +709,8 @@ export async function createGridField(metadataField, fieldMetadata) {
   }
 }
 
-export async function createQueryBuilderColumns(
-  selectedObject,
-  objectMetadata
-) {
-  // get the object fields metadata
-  const objMetadata = objectMetadata.find(
-    (o) => o.objName === selectedObject.id
-  );
-  const objFields = objMetadata.metadata.fields;
+export async function createQueryBuilderColumns(objMetadata) {
+  const objFields = objMetadata.fields;
 
   const cols = [];
 
@@ -1249,14 +1242,18 @@ export async function getObjectOptions(userInfo) {
   }
 }
 
-// metadata manager
+/* metadata manager
+  returns metadata for selected object from cache
+  or retrieves it from sfdc
+*/
 export async function getObjectMetadata(sobject, userInfo, objectMetadata) {
-  // creates metadata for selected object
-  // created if required
+  let objMetadata = null;
 
-  const objMetadata = objectMetadata.find((o) => o.objName === sobject);
+  if (objectMetadata) {
+    objMetadata = objectMetadata.find((o) => o.objName === sobject);
+  }
 
-  if (objMetadata === undefined) {
+  if (!objectMetadata || !objMetadata) {
     const metadataUrl = `/salesforce/sobjectFieldsDescribe`;
 
     const payload = {

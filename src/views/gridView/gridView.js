@@ -7,42 +7,27 @@ import React, {
   useCallback,
 } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import * as ReactDom from "react-dom";
-
-// react-hook-form
-import { useForm, Controller } from "react-hook-form";
 
 // React Spinner
 import LoadingOverlay from "react-loading-overlay-ts";
-import BounceLoader from "react-spinners/BounceLoader";
-import GridLoader from "react-spinners/GridLoader";
+import DotLoader from "react-spinners/DotLoader";
+
+// Lodash
+import _ from "lodash";
 
 // subviews
 import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
 
 // Redux
 import { addMetadata } from "../../features/objectMetadataSlice";
-import { setGridColumns } from "../../features/gridColumnsSlice";
-import { setGridData } from "../../features/gridDataSlice";
 import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
-import { setObjectList } from "../../features/objectListSlice";
-import { setObjectOptions } from "../../features/objectOptionsSlice";
-import { setQueryColumns } from "../../features/queryColumnsSlice";
-import { setQueryBuilderVisible } from "../../features/queryBuilderVisabilitySlice";
-import { setQueryOptions } from "../../features/queryOptionsSlice";
+
 import { setQueryPanelVisible } from "../../features/queryPanelVisabilitySlice";
 import { setQueryRule } from "../../features/queryRuleSlice";
-import { setQueryRuleText } from "../../features/queryRuleTextSlice";
-import { setQueryList } from "../../features/queryListSlice";
 import { setRelationPreferences } from "../../features/relationPreferencesSlice";
-// import { setSelectedGridRow } from "../../features/selectedGridRowSlice";
+// must use global statue for selectedObject because
+// QueryBuilder templates need access to this state
 import { setSelectedObject } from "../../features/selectedObjectSlice";
-import { setSelectedQuery } from "../../features/selectedQuerySlice";
-import { setSelectedTemplate } from "../../features/selectedTemplateSlice";
-import { setSidebarSize } from "../../features/sidebarSizeSlice";
-import { setTemplateFields } from "../../features/templateFieldsSlice";
-import { setTemplateList } from "../../features/templateListSlice";
-import { setTemplateOptions } from "../../features/templateOptionsSlice";
 
 // AgGrid
 import { AgGridReact } from "ag-grid-react";
@@ -65,13 +50,10 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import { FormControlLabel } from "@mui/material";
-import { Select } from "@mui/material/Select";
 import { Stack } from "@mui/material";
-import { styled, useTheme } from "@mui/material/styles";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Toolbar from "@mui/material/Toolbar";
-import { Typography } from "@mui/material/styles/createTypography";
 
 // components
 import CheckboxTemplate from "../../components/checkboxTemplate";
@@ -87,17 +69,9 @@ import TextTemplate from "../../components/textTemplate";
 import { useSnackbar } from "notistack";
 import { Slide } from "@mui/material";
 
-// Material Icons
-import * as Bi from "react-icons/bi"; // bi icons
-import * as Di from "react-icons/di"; // di icons
-import * as Fi from "react-icons/fi"; // feather icons
-import * as Io from "react-icons/io"; // IO icons
-import * as Mi from "react-icons/md"; // material icons
-import * as Vsc from "react-icons/vsc"; // vsc icons
-
 // MUI icons
 import AddOutlinedIcon from "@mui/icons-material/Add";
-import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
+// import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import DoubleArrowOutlinedIcon from "@mui/icons-material/DoubleArrowOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -111,28 +85,14 @@ import {
   QueryBuilderComponent,
   ColumnsDirective,
   ColumnDirective,
-  ColumnsModel,
-  RuleModel,
-  RuleChangeEventArgs,
+  // ColumnsModel,
+  // RuleModel,
+  // RuleChangeEventArgs,
 } from "@syncfusion/ej2-react-querybuilder";
-import {
-  ButtonComponent,
-  CheckBoxComponent,
-} from "@syncfusion/ej2-react-buttons";
-import { DatePickerComponent } from "@syncfusion/ej2-react-calendars";
-import {
-  DropDownListComponent,
-  MultiSelectComponent,
-} from "@syncfusion/ej2-react-dropdowns";
-import { NumericTextBoxComponent } from "@syncfusion/ej2-react-inputs";
+
 import { RadioButtonComponent } from "@syncfusion/ej2-react-buttons";
-import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 
 import * as gf from "./gridFunctions";
-import { grid } from "@mui/system";
-import { rippleEffect } from "@syncfusion/ej2-base";
-import { render } from "@testing-library/react";
-import { CheckBox } from "@mui/icons-material";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -150,10 +110,7 @@ const useStyles = makeStyles((theme) => ({
 
 export default function GridView() {
   // Snackbar
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
-
-  // React-Hook-form
-  const { register } = useForm();
+  const { enqueueSnackbar } = useSnackbar();
 
   const onClickDismiss = (key) => () => {
     notistackRef.current.closeSnackbar(key);
@@ -177,29 +134,47 @@ export default function GridView() {
 
   // redux global state
   const dispatch = useDispatch();
-  const gridColumns = useSelector((state) => state.gridColumns);
   const loadingIndicator = useSelector((state) => state.loadingIndicator);
   const objectMetadata = useSelector((state) => state.objectMetadata);
-  const objectOptions = useSelector((state) => state.objectOptions);
-  const queryColumns = useSelector((state) => state.queryColumns);
-  const queryOptions = useSelector((state) => state.queryOptions);
   const queryPanelVisible = useSelector((state) => state.queryPanelVisible);
   const queryRule = useSelector((state) => state.queryRule);
   const relationPreferences = useSelector((state) => state.relationPreferences);
   const selectedObject = useSelector((state) => state.selectedObject);
-  // const selectedGridRow = useSelector((state) => state.selectedGridRow);
-  const selectedTemplate = useSelector((state) => state.selectedTemplate);
-  const selectedQuery = useSelector((state) => state.selectedQuery);
-  const templateOptions = useSelector((state) => state.templateOptions);
-  const templateFields = useSelector((state) => state.templateFields);
   const userInfo = useSelector((state) => state.userInfo);
 
-  // local state values
-  const [queryVisible, setQueryVisible] = useState(false);
-  const [queryRuleText, setQueryRuleText] = useState();
-  const selectedGridRow = useRef(null);
+  // grid view local state
+  const prevObjectOptions = useRef(null);
+  const prevQueryOptions = useRef(null);
+  const prevSelectedGridRow = useRef(null);
+  const prevSelectedObject = useRef(null);
+  const prevSelectedTemplate = useRef(null);
+  const prevSelectedQuery = useRef(null);
+  const prevTemplateOptions = useRef(null);
 
-  // template form
+  // AgGrid local state
+  const [rowData, setRowData] = useState([]);
+  const [columnDefs, setColumnDefs] = useState([]);
+
+  const [objectOptions, setObjectOptions] = useState([]);
+  const [templateOptions, setTemplateOptions] = useState([]);
+  const [queryOptions, setQueryOptions] = useState([]);
+  const [selectedGridRow, setSelectedGridRow] = useState({});
+  // const [selectedObject, setSelectedObject] = useState({});
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedQuery, setSelectedQuery] = useState(null);
+
+  // QueryBuilder local state
+  const prevQueryColumns = useRef(null);
+  const [queryColumns, setQueryColumns] = useState([]);
+
+  const [queryRuleText, setQueryRuleText] = useState();
+  const [queryVisible, setQueryVisible] = useState(false);
+
+  const [queryContentRows, setQueryContentRows] = useState(5);
+  const [saveQueryText, setSaveQueryText] = useState("");
+  const [saveTemplateText, setSaveTemplateText] = useState("");
+
+  // template form local state
   const [templateFormHeader, setTemplateFormHeader] = useState("");
   const [templateFormFields, setTemplateFormFields] = useState([]);
   const [templateFormData, setTemplateFormData] = useState([]);
@@ -207,18 +182,8 @@ export default function GridView() {
   const templateNameInput = useRef("");
   const templateVisibility = useRef(false);
 
-  // QueryBuilder
-  const [queryContentRows, setQueryContentRows] = useState(5);
-  const [showQuery, setShowQuery] = useState(false);
-  const [saveQueryText, setSaveQueryText] = useState("");
-  const [saveTemplateText, setSaveTemplateText] = useState("");
-
   const sidebarSize = useSelector((state) => state.sidebarSize);
   const isLoggedIn = useSelector((state) => state.isLoggedIn);
-
-  // AgGrid state
-  const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
 
   const containerStyle = useMemo(() => ({ width: "95%", height: "90%" }), []);
   const gridStyle = useMemo(
@@ -237,11 +202,19 @@ export default function GridView() {
   }, []);
 
   // get org objects after user login
+  // and set the selected object
   useEffect(() => {
     const loadInitialData = async () => {
+      // wait until user has logged in
       if (Object.keys(userInfo).length === 0) {
         return;
       }
+
+      if (_.isEqual(objectOptions, prevObjectOptions.current)) {
+        return;
+      }
+
+      console.log(`Running get org objects useEffect for userInfo ${userInfo}`);
 
       setLoadingIndicator(true);
       const result = await gf.getObjectOptions(userInfo);
@@ -261,18 +234,14 @@ export default function GridView() {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(
-          "Error retrieving org objects",
-          snackOptions
-        );
+        enqueueSnackbar("Error retrieving org objects", snackOptions);
 
         return "error";
       }
 
       const data = result.records;
-
-      // set global state
-      dispatch(setObjectOptions(data));
+      prevObjectOptions.current = data;
+      setObjectOptions(data);
 
       const selectedObj = data[0];
 
@@ -283,58 +252,72 @@ export default function GridView() {
     };
 
     loadInitialData();
-  }, [userInfo, dispatch, enqueueSnackbar]);
+  }, [objectOptions, userInfo, enqueueSnackbar]);
 
-  // selected object changed
-  useEffect(() => {
-    /*  when the selected object changes
+  /*  when the selected object changes
       1 - get metadata for selected object
-      2 - load the template options
-      3 - load the query options
-      4 - set selected template & query based on preferences or defaults
-      5 - get the relationship preferences
-      6 - create the subviews based on user relationship preferences
-    */
-
+      2 - create the queryBuilder columns
+      3 - load the template options
+      4 - load the query options
+      5 - set selected template & query based on preferences or defaults
+      6 - get the relationship preferences
+      7 - create the subviews based on user relationship preferences
+  */
+  useEffect(() => {
     const objChanged = async () => {
       if (selectedObject === null || selectedObject.id === "") {
+        // setLoadingIndicator(false);
         return;
       }
 
-      let hasTemplates = null;
-      let hasQueries = null;
+      // if selectedObject hasn't changed, return
+      if (_.isEqual(selectedObject, prevSelectedObject.current)) {
+        setLoadingIndicator(false);
+        return;
+      }
+
+      prevSelectedObject.current = { ...selectedObject };
+
+      console.log(
+        `Running selected object changed useEffect for object ${selectedObject.id}`
+      );
+
+      let objMetadata = null;
 
       try {
-        // get object metadata
-        const metadataResult = await gf.getObjectMetadata(
-          selectedObject.id,
-          userInfo,
-          objectMetadata
-        );
-
-        if (metadataResult.status !== "ok") {
-          throw new Error(
-            `useSelectedObjectChanged() - ${metadataResult.errorMessage}`
-          );
-        }
-
-        const hasMetadata = objectMetadata.find(
+        objMetadata = objectMetadata.find(
           (f) => f.objName === selectedObject.id
         );
 
-        if (hasMetadata === undefined) {
-          // store object metadata in global state
-          const objMetadata = metadataResult.records;
+        if (objMetadata === undefined) {
+          // get object metadata
+          const metadataResult = await gf.getObjectMetadata(
+            selectedObject.id,
+            userInfo,
+            objectMetadata
+          );
 
-          const newObjMetadata = {
+          if (metadataResult.status !== "ok") {
+            throw new Error(
+              `Error retrieving metadata for ${selectedObject.id}`
+            );
+          }
+
+          // store object metadata in global state
+          objMetadata = {
             objName: selectedObject.id,
-            metadata: objMetadata,
+            metadata: metadataResult.records,
           };
 
-          const newMetadata = [...objectMetadata, newObjMetadata];
-
-          dispatch(addMetadata(newObjMetadata));
+          dispatch(addMetadata(objMetadata));
         }
+
+        // create QueryBuilder columns
+        const qbColumns = await gf.createQueryBuilderColumns(
+          objMetadata.metadata
+        );
+
+        setQueryColumns(qbColumns);
 
         // get templates for selected object
         const templateResult = await gf.getTemplateRecords(
@@ -343,9 +326,7 @@ export default function GridView() {
         );
 
         if (templateResult.status === "error") {
-          throw new Error(
-            `useSelectedObjectChanged() - ${templateResult.errorMessage}`
-          );
+          throw new Error(`Error getting templates for  ${selectedObject.id}`);
         }
 
         const templateData = templateResult.records;
@@ -359,7 +340,7 @@ export default function GridView() {
           };
           tmpOptions.push(newOpt);
         });
-        dispatch(setTemplateOptions(tmpOptions));
+        setTemplateOptions(tmpOptions);
 
         // create the query options list
         const queryResult = await gf.getQueryOptions(
@@ -369,7 +350,7 @@ export default function GridView() {
 
         if (queryResult.status === "error") {
           throw new Error(
-            `useSelectedObjectChanged() - ${queryResult.errorMessage}`
+            `Error getting query options for ${selectedObject.id}`
           );
         }
 
@@ -384,7 +365,7 @@ export default function GridView() {
           };
           qryOptions.push(newOpt);
         });
-        dispatch(setQueryOptions(qryOptions));
+        setQueryOptions(qryOptions);
 
         // check for grid preferences
         const prefResult = await gf.getGridPreferences(
@@ -395,7 +376,7 @@ export default function GridView() {
 
         if (prefResult.status === "error") {
           throw new Error(
-            `useSelectedObjectChanged() - Error retrieving user preferences for ${selectedObject.id}`
+            `Error retrieving grid preferences for ${selectedObject.id}`
           );
         }
 
@@ -403,7 +384,7 @@ export default function GridView() {
 
         if (prefData.length > 1) {
           throw new Error(
-            `useSelectedObjectChanged() - Found more than 1 user preference for ${selectedObject.id}`
+            `Error - Found more than 1 grid preference for ${selectedObject.id}`
           );
         }
 
@@ -415,7 +396,7 @@ export default function GridView() {
           const tmpOption = tmpOptions.find((o) => o.id === templatePrefId);
 
           // use this template
-          dispatch(setSelectedTemplate(tmpOption));
+          setSelectedTemplate(tmpOption);
 
           // get query preferenceId
           const queryPrefId = Number(prefData[0].queryid);
@@ -424,7 +405,7 @@ export default function GridView() {
           const queryOption = qryOptions.find((o) => o.id === queryPrefId);
 
           // use this template
-          dispatch(setSelectedQuery(queryOption));
+          setSelectedQuery(queryOption);
 
           return;
         }
@@ -442,7 +423,7 @@ export default function GridView() {
 
         if (defaultTemplateResult.status === "error") {
           throw new Error(
-            `useSelectedObjectChanged() - Error retrieving template defaults for ${selectedObject.id}`
+            `Error retrieving template defaults for ${selectedObject.id}`
           );
         }
 
@@ -452,7 +433,7 @@ export default function GridView() {
           // default templates only valid for public templates
           // there should only be 1 default template per object
           throw new Error(
-            `useSelectedObjectChanged() - found more than 1 default template for ${selectedObject.id}`
+            `Error - found more than 1 default template for ${selectedObject.id}`
           );
         }
 
@@ -465,7 +446,13 @@ export default function GridView() {
           );
 
           // use this template
-          dispatch(setSelectedTemplate(templateOption));
+          setSelectedTemplate(templateOption);
+        }
+
+        if (defaultTemplates.length === 0) {
+          // pick the first option
+          // use this template
+          setSelectedTemplate(tmpOptions[0]);
         }
 
         const defaultQueryResult = await gf.getDefaultQueries(
@@ -479,7 +466,7 @@ export default function GridView() {
 
         if (defaultQueryResult.status === "error") {
           throw new Error(
-            `useSelectedObjectChanged() - Error retrieving query defaults for ${selectedObject.id}`
+            `Error retrieving query defaults for ${selectedObject.id}`
           );
         }
 
@@ -489,7 +476,7 @@ export default function GridView() {
           // default queries only valid for public queries
           // there should only be 1 default query per object
           throw new Error(
-            `useSelectedObjectChanged() - found more than 1 default query for ${selectedObject.id}`
+            `Error - found more than 1 default query for ${selectedObject.id}`
           );
         }
 
@@ -502,11 +489,15 @@ export default function GridView() {
           );
 
           // use this query
-          dispatch(setSelectedTemplate(queryOption));
+          setSelectedTemplate(queryOption);
+        }
+
+        if (defaultQueries.length === 0) {
+          // pick the first one
+          setSelectedQuery(qryOptions[0]);
         }
 
         // create the sub views
-
         const result = await gf.getRelationshipPreferences(userInfo);
         if (result.status === "error") {
           throw new Error(result.errorMessage);
@@ -521,6 +512,11 @@ export default function GridView() {
           const objRelPrefs = allObjPrefs.find(
             (p) => p.object === selectedObject.id
           );
+
+          if (!objRelPrefs) {
+            return;
+          }
+
           const prefs = objRelPrefs.relations;
 
           // get metadata if needed
@@ -561,15 +557,19 @@ export default function GridView() {
                   TransitionComponent: Slide,
                 };
 
-                const key = enqueueSnackbar(error.message, snackOptions);
+                enqueueSnackbar(error.message, snackOptions);
               });
           });
 
           dispatch(setRelationPreferences(result.records[0].preferences));
         }
+
+        setLoadingIndicator(false);
       } catch (error) {
+        setLoadingIndicator(false);
+
         // log error and notify user
-        console.log(`useSelectedObjectChanged() - ${error.message}`);
+        console.log(error.message);
 
         // notify user of error
         const snackOptions = {
@@ -582,21 +582,38 @@ export default function GridView() {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(error.message, snackOptions);
+        enqueueSnackbar(error.message, snackOptions);
       }
     };
 
     objChanged();
-  }, [selectedObject, dispatch, enqueueSnackbar, objectMetadata, userInfo]);
+  }, [selectedObject, enqueueSnackbar, objectMetadata, dispatch, userInfo]);
 
-  // selectedTemplate changed, create the grid columns
+  /*  when the selectedTemplate changes
+    1 - create the grid columns
+  */
   useEffect(() => {
     const tmpChanged = async () => {
-      if (selectedTemplate === null || selectedTemplate.id === "") {
+      if (!selectedTemplate || Object.keys(selectedTemplate).length === 0) {
+        setLoadingIndicator(false);
         return;
       }
 
+      // if selected template hasn't changed, return
+      if (_.isEqual(selectedTemplate, prevSelectedTemplate.current)) {
+        setLoadingIndicator(false);
+        return;
+      }
+
+      prevSelectedTemplate.current = { ...selectedTemplate };
+
+      console.log(
+        `Running selected template changed useEffect for template ${selectedTemplate.label}`
+      );
+
       try {
+        setLoadingIndicator(true);
+
         // get the template fields for selected template
         const templateFieldResult = await gf.getTemplateFields(
           selectedTemplate
@@ -618,16 +635,11 @@ export default function GridView() {
           gridRef
         );
 
-        // only store gridColumns if they changed
-        const difference = [
-          ...gf.compareArrays(gridCols, gridColumns),
-          ...gf.compareArrays(gridColumns, gridCols),
-        ];
+        setColumnDefs(gridCols);
 
-        if (difference.length > 0) {
-          setColumnDefs(gridCols);
-        }
+        setLoadingIndicator(false);
       } catch (error) {
+        setLoadingIndicator(false);
         // log error and notify user
         console.log(`useEffectTemplateChanged() - ${error.message}`);
 
@@ -642,117 +654,445 @@ export default function GridView() {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(error.message, snackOptions);
+        enqueueSnackbar(error.message, snackOptions);
       }
     };
 
     tmpChanged();
-  }, [selectedTemplate, enqueueSnackbar, objectMetadata, selectedObject]);
-
-  // create the QueryBuilder columns
-  useEffect(() => {
-    if (objectMetadata.length === 0 || selectedObject === null) {
-      return;
-    }
-
-    const qbChanged = async () => {
-      if (selectedObject === null || objectMetadata.length === 0) {
-        return;
-      }
-      // create QueryBuilder columns
-      const qbColumns = await gf.createQueryBuilderColumns(
-        selectedObject,
-        objectMetadata
-      );
-
-      dispatch(setQueryColumns(qbColumns));
-
-      const a = 1;
-    };
-
-    qbChanged();
-  }, [gridColumns, dispatch, objectMetadata, selectedObject]);
+  });
 
   // update the QueryBuilder rules when the selected query changes
   // and run the query
   useEffect(() => {
     const queryChanged = async () => {
-      if (selectedObject === null || selectedQuery === null) {
-        return;
-      }
+      const getQuerySQL = (query, objFields, objName) => {
+        let result = [];
 
-      // create QueryBuilder rule conditions
-      const queryResult = await gf.getSelectedQuery(selectedQuery, userInfo);
+        const outerCondition = query.condition;
 
-      if (queryResult.status === "error") {
-        throw new Error(`gridView-useEffect() - ${queryResult.errorMessage}`);
-      }
+        const rules = query.rules;
 
-      const query = queryResult.records[0];
+        rules.forEach((rule) => {
+          // a rule can be a group
+          if (rule.rules) {
+            const groupObj = {
+              condition: rule.condition,
+              rules: rule.rules,
+            };
+            processGroup(groupObj, objFields, objName, result);
+          } else {
+            const response = processRule(rule, objFields);
+            result.push(response.sql);
+          }
+        });
 
-      const rule = query.query_rules;
+        let queryStr = "";
+        if (result.length > 1) {
+          queryStr = result.join(` ${outerCondition.toUpperCase()} `);
+        } else {
+          queryStr = result[0];
+        }
 
-      dispatch(setQueryRule(rule));
+        console.log(queryStr);
+        return queryStr;
+      };
 
-      if (queryBuilderRef.current !== null) {
+      const processGroup = (ruleGroup, objFields, objName, result) => {
+        const groupCondition = ruleGroup.condition;
+        const rules = ruleGroup.rules;
+        let queryStr = "";
+
+        const groupResult = [];
+
+        rules.forEach((rule) => {
+          if (rule.rules === undefined) {
+            const response = processRule(rule, objFields);
+            groupResult.push(response.sql);
+          } else {
+            const ruleObj = {
+              condition: rule.condition,
+              rules: rule.rules,
+            };
+            processGroup(ruleObj, objFields, objName, result);
+          }
+        });
+
+        if (groupResult.length > 1) {
+          queryStr = groupResult.join(` ${groupCondition.toUpperCase()} `);
+          queryStr = `${queryStr}`;
+        } else {
+          queryStr = groupResult[0];
+        }
+
+        result.push(`(${queryStr})`);
+      };
+
+      const processRule = (rule, objFields) => {
+        try {
+          const { field, label, operator, type, value } = rule;
+
+          const fieldDataType = getFieldDataType(field, objFields);
+
+          // to support between operation
+          // between only for non-string values
+          let filterStartValue = null;
+          let filterEndValue = null;
+
+          // if operator === 'picklist'
+          // create a comma-seperated list for the SOQL IN clause
+          // picklist operator valid for string values only
+          let valuesArray = [];
+          let filterValue = null;
+          let filterValues = [];
+          if (fieldDataType === "picklist") {
+            const numValues = value.length;
+            value.forEach((el, index) => {
+              filterValues = filterValues + `'${el}'`;
+              if (index < numValues - 1) {
+                filterValues = filterValues + ", ";
+              }
+            });
+          } else if (operator === "between" || operator === "notBetween") {
+            filterStartValue = value[0];
+            filterEndValue = value[1];
+          } else {
+            filterValue = value;
+          }
+
+          switch (operator) {
+            case "equal":
+              if (
+                fieldDataType === "decimal" ||
+                fieldDataType === "currency" ||
+                fieldDataType === "double" ||
+                fieldDataType === "integer" ||
+                fieldDataType === "long" ||
+                fieldDataType === "boolean"
+              ) {
+                // non-string values are not quoted
+                return {
+                  sql: `${field} = ${filterValue}`,
+                };
+              } else if (
+                fieldDataType === "string" ||
+                fieldDataType === "encryptedstring" ||
+                fieldDataType === "id"
+              ) {
+                // string values are quoted
+                return { sql: `${field} = '${filterValue}'` };
+              } else if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} = ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} = ${aDateLiteral}` };
+              } else if (fieldDataType === "picklist") {
+                // picklist input field is multi-select
+                // so implement using IN
+                return { sql: `${field} IN (${filterValues})` };
+              } else {
+                // treat other data types as string
+                // NEED TO REVIEW THIS EX: BLOBS, ETC.
+                return { sql: `${field} = '${filterValues}'` };
+              }
+            case "notequal":
+              // value could be a string or number
+              if (
+                fieldDataType === "decimal" ||
+                fieldDataType === "currency" ||
+                fieldDataType === "double" ||
+                fieldDataType === "integer" ||
+                fieldDataType === "long" ||
+                fieldDataType === "boolean"
+              ) {
+                return { sql: `${field} <> ${filterValue}` };
+              } else if (
+                fieldDataType === "string" ||
+                fieldDataType === "encryptedstring" ||
+                fieldDataType === "id"
+              ) {
+                // string values are quoted
+                return { sql: `${field} <> '${filterValue}'` };
+              } else if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} <> ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} <> ${aDateLiteral}` };
+              } else if (fieldDataType === "picklist") {
+                // picklist input field is multi-select
+                // so implement using IN
+                return {
+                  sql: `NOT ${field} IN (${filterValues})`,
+                };
+              } else {
+                return { sql: `${field} <> '${filterValue}'` };
+              }
+            case "in":
+              // soql in clause needs comma-seperated list of values
+              // get the values
+
+              return { sql: `${field} IN (${filterValues})` };
+            case "notin":
+              // soql in clause needs comma-seperated list of values
+              // get the values
+
+              return { sql: `NOT ${field} IN (${filterValues})` };
+            case "contains":
+              // convert to LIKE
+              return { sql: `${field} LIKE '%${filterValue}%'` };
+            case "notcontains":
+              // convert to LIKE
+              return {
+                sql: `NOT ${field} LIKE '%${filterValue}%'`,
+              };
+            case "lessthanorequal":
+              // valid for numbers and dates
+              if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} <= ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} <= ${aDateLiteral}` };
+              } else {
+                return { sql: `${field} <= ${filterValue}` };
+              }
+            case "greaterorequal":
+              // valid for numbers and dates
+              if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} >= ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} >= ${aDateLiteral}` };
+              } else {
+                return { sql: `${field} >= ${filterValue}` };
+              }
+            case "lessthan":
+              // valid for numbers and dates
+              if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} < ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} < ${aDateLiteral}` };
+              } else {
+                return { sql: `${field} < ${filterValue}` };
+              }
+            case "greaterthan":
+              // valid for numbers and dates
+              if (fieldDataType === "date") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return { sql: `${field} > ${aDateLiteral}` };
+              } else if (fieldDataType === "datetime") {
+                const aDate = new Date(filterValue);
+                const aDateLiteral = JSON.stringify(aDate);
+                return {
+                  sql: `${field} > ${aDateLiteral}`,
+                  filterValue: [],
+                };
+              } else {
+                return { sql: `${field} > ${filterValue}` };
+              }
+            case "beginswith":
+              // valid for text
+              return { sql: `${field} LIKE '${filterValue}%'` };
+            case "notbeginswith":
+              // valid for text
+              return {
+                sql: `NOT ${field} LIKE '${filterValue}%'`,
+              };
+            case "endswith":
+              // valid for text
+              return { sql: `${field} LIKE '%${filterValue}'` };
+            case "notendswith":
+              // valid for text
+              return {
+                sql: `NOT ${field} LIKE '%${filterValue}'`,
+              };
+            case "between":
+              // for date and number fields
+              if (fieldDataType === "date") {
+                const startDate = new Date(filterStartValue);
+                const startDateLiteral = JSON.stringify(startDate);
+                const endDate = new Date(filterEndValue);
+                const endDateLiteral = JSON.stringify(endDate);
+                return {
+                  sql: `${field} >= ${startDateLiteral} AND ${field} <= ${endDateLiteral}`,
+                };
+              } else if (fieldDataType === "datetime") {
+                const startDate = new Date(filterStartValue);
+                const startDateLiteral = JSON.stringify(startDate);
+                const endDate = new Date(filterEndValue);
+                const endDateLiteral = JSON.stringify(endDate);
+                return {
+                  sql: `${field} >= ${startDateLiteral} AND ${field} <= ${endDateLiteral}`,
+                };
+              } else {
+                return {
+                  sql: `${field} >= ${filterValue.start} AND ${field} <= ${filterValue.end}`,
+                };
+              }
+            case "notbetween": {
+              // for non-string values
+              if (fieldDataType === "date") {
+                const startDate = new Date(filterStartValue);
+                const startDateLiteral = JSON.stringify(startDate);
+                const endDate = new Date(filterEndValue);
+                const endDateLiteral = JSON.stringify(endDate);
+                return {
+                  sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
+                };
+              } else if (fieldDataType === "datetime") {
+                const startDate = new Date(filterStartValue);
+                const startDateLiteral = JSON.stringify(startDate);
+                const endDate = new Date(filterEndValue);
+                const endDateLiteral = JSON.stringify(endDate);
+                return {
+                  sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
+                };
+              }
+            }
+            case "isnull": {
+              return { sql: `${field} = null` };
+            }
+            case "isnotnull": {
+              return { sql: `${field} != null` };
+            }
+            default: {
+              // revisit this as we want to filter out queries with blobs, etc.
+              return { sql: `${field} = '${filterValue}'` };
+            }
+          }
+        } catch (error) {
+          return { status: "error", errorMessage: error.message };
+        }
+      };
+
+      try {
+        if (
+          !selectedObject ||
+          !selectedQuery ||
+          Object.keys(selectedObject).length === 0 ||
+          Object.keys(selectedQuery).length === 0
+        ) {
+          return;
+        }
+
+        // if selected query hasn't changed, return
+        if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
+          return;
+        }
+
+        console.log(
+          `Running QueryBuilder useEffect for query ${selectedQuery.id}`
+        );
+
+        // get query from database
+        const queryResult = await gf.getSelectedQuery(selectedQuery, userInfo);
+
+        if (queryResult.status === "error") {
+          throw new Error(`gridView-useEffect() - ${queryResult.errorMessage}`);
+        }
+
+        const query = queryResult.records[0];
+
+        const rule = query.query_rules;
+
+        // store query rule in local state
+        dispatch(setQueryRule(rule));
+
+        // update the query text after rule change
+        let queryContent = null;
+        if (jsonButton.current.checked) {
+          queryContent = JSON.stringify(rule, null, 4);
+        } else {
+          queryContent = queryBuilderRef.current.getSqlFromRules(rule);
+        }
+
+        setQueryRuleText(queryContent);
+
+        // load the rule into the QueryBuilder
         queryBuilderRef.current.setRules(rule);
-      }
 
-      console.log("GridView() - Executing selectedQueryChanged");
+        // execute the query
+        // const executeQueryResult = await runQuery();
+        // get object metadata
+        const metadataResult = await gf.getObjectMetadata(
+          selectedObject.id,
+          userInfo,
+          objectMetadata
+        );
 
-      // setLoadingIndicator(false);
-      // return;
+        if (metadataResult.status !== "ok") {
+          throw new Error(
+            `Error retrieving object metadata in Query useEffect`
+          );
+        }
 
-      const executeQueryResult = await runQuery();
+        const objMetadata = metadataResult.records;
 
-      if (executeQueryResult === undefined) {
-        setLoadingIndicator = false;
-        return;
-      }
+        let objMetadataFields = objMetadata.metadata.fields;
 
-      if (executeQueryResult.status !== "ok") {
-        // showToast(
-        //   "GridToolbar() - Error retrieving query templates",
-        //   result.errorMessage,
-        //   "Error!",
-        //   0,
-        //   true
-        // );
-        console.log(executeQueryResult.errorMessage);
+        const sqlResult = getQuerySQL(
+          rule,
+          objMetadataFields,
+          selectedObject.id
+        );
+
+        const executeQueryResult = await gf.runQuery(
+          selectedObject.id,
+          sqlResult
+        );
+
+        if (executeQueryResult.status !== "ok") {
+          throw new Error(`Error executing query for ${selectedQuery.id}`);
+        }
+
+        let queryData = executeQueryResult.records[0];
+
+        // update grid row state
+        setRowData(queryData);
         setLoadingIndicator(false);
-        return;
+      } catch (error) {
+        setLoadingIndicator(false);
+        console.log(error.message);
+
+        // notify user
+        const snackOptions = {
+          variant: "error",
+          autoHideDuration: 5000,
+          anchorOrigin: {
+            vertical: "top",
+            horizontal: "right",
+          },
+          TransitionComponent: Slide,
+        };
+
+        enqueueSnackbar(error.message, snackOptions);
       }
-
-      let queryData = executeQueryResult.records[0];
-
-      // convert date strings to objects
-      // queryData.forEach((r) => {});
-
-      // store query results in global state
-      // console.log("GridToolbar() - Storing query results state");
-      // dispatch(setGridData(queryResult));
-
-      // update grid row state
-      setRowData(queryData);
-      setLoadingIndicator(false);
     };
 
     queryChanged();
-  }, [selectedQuery, dispatch, userInfo]);
-
-  // update the query text after rule change
-  useEffect(() => {
-    const validRule = queryBuilderRef.current.getRules();
-    let queryContent = null;
-
-    if (jsonButton.current.checked) {
-      queryContent = JSON.stringify(validRule, null, 4);
-    } else {
-      queryContent = queryBuilderRef.current.getSqlFromRules(validRule);
-    }
-
-    setQueryRuleText(queryContent);
-  }, [queryRule, queryBuilderRef]);
+  }, [
+    dispatch,
+    enqueueSnackbar,
+    objectMetadata,
+    selectedObject,
+    selectedQuery,
+    userInfo,
+  ]);
 
   const classes = useStyles();
 
@@ -804,6 +1144,7 @@ export default function GridView() {
   }
 
   function processRule(rule, objFields) {
+    // called from the QueryBuilder run query button
     try {
       const { field, label, operator, type, value } = rule;
 
@@ -828,14 +1169,12 @@ export default function GridView() {
             filterValues = filterValues + ", ";
           }
         });
-      } else if (operator == "between" || operator == "notBetween") {
+      } else if (operator === "between" || operator === "notBetween") {
         filterStartValue = value[0];
         filterEndValue = value[1];
       } else {
         filterValue = value;
       }
-
-      let whereClause = "";
 
       switch (operator) {
         case "equal":
@@ -875,7 +1214,6 @@ export default function GridView() {
             // NEED TO REVIEW THIS EX: BLOBS, ETC.
             return { sql: `${field} = '${filterValues}'` };
           }
-          break;
         case "notequal":
           // value could be a string or number
           if (
@@ -911,31 +1249,24 @@ export default function GridView() {
           } else {
             return { sql: `${field} <> '${filterValue}'` };
           }
-          break;
         case "in":
           // soql in clause needs comma-seperated list of values
           // get the values
 
           return { sql: `${field} IN (${filterValues})` };
-
-          break;
         case "notin":
           // soql in clause needs comma-seperated list of values
           // get the values
 
           return { sql: `NOT ${field} IN (${filterValues})` };
-
-          break;
         case "contains":
           // convert to LIKE
           return { sql: `${field} LIKE '%${filterValue}%'` };
-          break;
         case "notcontains":
           // convert to LIKE
           return {
             sql: `NOT ${field} LIKE '%${filterValue}%'`,
           };
-          break;
         case "lessthanorequal":
           // valid for numbers and dates
           if (fieldDataType === "date") {
@@ -949,7 +1280,6 @@ export default function GridView() {
           } else {
             return { sql: `${field} <= ${filterValue}` };
           }
-          break;
         case "greaterorequal":
           // valid for numbers and dates
           if (fieldDataType === "date") {
@@ -963,7 +1293,6 @@ export default function GridView() {
           } else {
             return { sql: `${field} >= ${filterValue}` };
           }
-          break;
         case "lessthan":
           // valid for numbers and dates
           if (fieldDataType === "date") {
@@ -977,7 +1306,6 @@ export default function GridView() {
           } else {
             return { sql: `${field} < ${filterValue}` };
           }
-          break;
         case "greaterthan":
           // valid for numbers and dates
           if (fieldDataType === "date") {
@@ -994,27 +1322,22 @@ export default function GridView() {
           } else {
             return { sql: `${field} > ${filterValue}` };
           }
-          break;
         case "beginswith":
           // valid for text
           return { sql: `${field} LIKE '${filterValue}%'` };
-          break;
         case "notbeginswith":
           // valid for text
           return {
             sql: `NOT ${field} LIKE '${filterValue}%'`,
           };
-          break;
         case "endswith":
           // valid for text
           return { sql: `${field} LIKE '%${filterValue}'` };
-          break;
         case "notendswith":
           // valid for text
           return {
             sql: `NOT ${field} LIKE '%${filterValue}'`,
           };
-          break;
         case "between":
           // for date and number fields
           if (fieldDataType === "date") {
@@ -1038,7 +1361,6 @@ export default function GridView() {
               sql: `${field} >= ${filterValue.start} AND ${field} <= ${filterValue.end}`,
             };
           }
-          break;
         case "notbetween": {
           // for non-string values
           if (fieldDataType === "date") {
@@ -1049,7 +1371,6 @@ export default function GridView() {
             return {
               sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
             };
-            break;
           } else if (fieldDataType === "datetime") {
             const startDate = new Date(filterStartValue);
             const startDateLiteral = JSON.stringify(startDate);
@@ -1058,17 +1379,13 @@ export default function GridView() {
             return {
               sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
             };
-            break;
           }
-          break;
         }
         case "isnull": {
           return { sql: `${field} = null` };
-          break;
         }
         case "isnotnull": {
           return { sql: `${field} != null` };
-          break;
         }
         default: {
           // revisit this as we want to filter out queries with blobs, etc.
@@ -1112,7 +1429,6 @@ export default function GridView() {
 
   function getQuerySQL(query, objFields, objName) {
     let result = [];
-    const sql = "";
 
     const outerCondition = query.condition;
 
@@ -1143,59 +1459,106 @@ export default function GridView() {
     return queryStr;
   }
 
-  async function runQuery() {
-    setLoadingIndicator(true);
-    const query = queryBuilderRef.current.getRules();
-    const ruleStr = queryBuilderRef.current.getSqlFromRules(query);
+  const runQuery = useCallback(async () => {
+    function getQuerySQL(query, objFields, objName) {
+      let result = [];
 
-    // get object metadata
-    const metadataResult = await gf.getObjectMetadata(
-      selectedObject.id,
-      userInfo,
-      objectMetadata
-    );
+      const outerCondition = query.condition;
 
-    if (metadataResult.status !== "ok") {
-      throw new Error(`runQuery() - ${metadataResult.errorMessage}`);
+      const rules = query.rules;
+
+      rules.forEach((rule) => {
+        // a rule can be a group
+        if (rule.rules) {
+          const groupObj = {
+            condition: rule.condition,
+            rules: rule.rules,
+          };
+          processGroup(groupObj, objFields, objName, result);
+        } else {
+          const response = processRule(rule, objFields);
+          result.push(response.sql);
+        }
+      });
+
+      let queryStr = "";
+      if (result.length > 1) {
+        queryStr = result.join(` ${outerCondition.toUpperCase()} `);
+      } else {
+        queryStr = result[0];
+      }
+
+      console.log(queryStr);
+      return queryStr;
     }
 
-    const objMetadata = metadataResult.records;
+    try {
+      // executes query based on queryBuilder rule
+      const query = queryBuilderRef.current.getRules();
+      const ruleStr = queryBuilderRef.current.getSqlFromRules(query);
 
-    let objMetadataFields = objMetadata.metadata.fields;
+      // get object metadata
+      const metadataResult = await gf.getObjectMetadata(
+        selectedObject.id,
+        userInfo,
+        objectMetadata
+      );
 
-    // create the SOQL
-    const rules = query.rules;
+      if (metadataResult.status !== "ok") {
+        throw new Error(`runQuery() - ${metadataResult.errorMessage}`);
+      }
 
-    const sqlResult = getQuerySQL(query, objMetadataFields, selectedObject.id);
+      const objMetadata = metadataResult.records;
 
-    const executeQueryResult = await gf.runQuery(selectedObject.id, sqlResult);
+      let objMetadataFields = objMetadata.metadata.fields;
 
-    if (executeQueryResult.status !== "ok") {
-      // showToast(
-      //   "GridToolbar() - Error retrieving query templates",
-      //   result.errorMessage,
-      //   "Error!",
-      //   0,
-      //   true
-      // );
-      console.log(executeQueryResult.errorMessage);
-      setLoadingIndicator(false);
-      return;
+      // create the SOQL
+      const rules = query.rules;
+
+      const sqlResult = getQuerySQL(
+        query,
+        objMetadataFields,
+        selectedObject.id
+      );
+
+      const executeQueryResult = await gf.runQuery(
+        selectedObject.id,
+        sqlResult
+      );
+
+      if (executeQueryResult.status !== "ok") {
+        console.log(executeQueryResult.errorMessage);
+        throw new Error("Error executing query");
+      }
+
+      let queryData = executeQueryResult.records[0];
+
+      // update grid row state
+      setRowData(queryData);
+    } catch (error) {
+      console.log(error.message);
+
+      // notify user
+      const snackOptions = {
+        variant: "error",
+        autoHideDuration: 5000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      enqueueSnackbar("Error executing query", snackOptions);
     }
-
-    let queryData = executeQueryResult.records[0];
-
-    // convert date strings to objects
-    // queryData.forEach((r) => {});
-
-    // store query results in global state
-    // console.log("GridToolbar() - Storing query results state");
-    // dispatch(setGridData(queryResult));
-
-    // update grid row state
-    setRowData(queryData);
-    setLoadingIndicator(false);
-  }
+  }, [
+    enqueueSnackbar,
+    objectMetadata,
+    selectedObject,
+    userInfo,
+    processGroup,
+    processRule,
+  ]);
 
   // TEMPLATE FUNCTIONS
 
@@ -1285,11 +1648,7 @@ export default function GridView() {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(
-          "Please enter a template name",
-          snackOptions
-        );
-
+        enqueueSnackbar("Please enter a template name", snackOptions);
         return;
       }
 
@@ -1467,7 +1826,7 @@ export default function GridView() {
         TransitionComponent: Slide,
       };
 
-      const key = enqueueSnackbar("Template Saved", snackOptions);
+      enqueueSnackbar("Template Saved", snackOptions);
     } catch (error) {
       console.log(error.message);
 
@@ -1482,11 +1841,8 @@ export default function GridView() {
         TransitionComponent: Slide,
       };
 
-      const key = enqueueSnackbar(error.message, snackOptions);
+      enqueueSnackbar(error.message, snackOptions);
     }
-
-    // set the selected query to the new value
-    setLoadingIndicator(false);
 
     setTemplateFormOpen(false);
   }
@@ -1677,7 +2033,6 @@ export default function GridView() {
     */
 
     try {
-      // setLoadingIndicator(true);
       // get the selected template and determine if the current user is the owner
       const templateUrl = "/postgres/knexSelect";
       const templateResult = await gf.getTemplate(
@@ -1707,7 +2062,6 @@ export default function GridView() {
 
       return;
     } catch (error) {
-      setLoadingIndicator(false);
       console.log(error.message);
       return;
     }
@@ -1715,7 +2069,6 @@ export default function GridView() {
 
   async function saveQuery() {
     try {
-      setLoadingIndicator(true);
       // get the query record and determine if the current user is the owner
       const queryUrl = "/postgres/knexSelect";
       const queryResult = await gf.getQuery(selectedQuery.id, userInfo);
@@ -1815,9 +2168,7 @@ export default function GridView() {
       // dispatch(setQueryOptions(queryOps));
 
       // set the selected query to the new value
-      setLoadingIndicator(false);
     } catch (error) {
-      setLoadingIndicator(false);
       console.log(error.message);
       return;
     }
@@ -2057,7 +2408,7 @@ export default function GridView() {
       TransitionComponent: Slide,
     };
 
-    const key = enqueueSnackbar("Query Saved", snackOptions);
+    enqueueSnackbar("Query Saved", snackOptions);
 
     // update query text
     let queryContent = null;
@@ -2133,7 +2484,7 @@ export default function GridView() {
       TransitionComponent: Slide,
     };
 
-    const key = enqueueSnackbar("Template Saved", snackOptions);
+    enqueueSnackbar("Template Saved", snackOptions);
   }
 
   const handleCancelQueryClose = (e) => {
@@ -2153,9 +2504,6 @@ export default function GridView() {
   function setTemplateTextValue(event) {
     setSaveTemplateText(event.target.value);
   }
-
-  // QueryBuilder select options mapping
-  const multiSelectMapping = { text: "text", value: "value" };
 
   function checkboxTemplate(props) {
     return <CheckboxTemplate {...props} />;
@@ -2218,71 +2566,22 @@ export default function GridView() {
         },
       ],
     };
-  }, []);
+  }, [selectedObject]);
 
-  const icons = useMemo(() => {
-    return {
-      "custom-stats": '<span class="ag-icon ag-icon-custom-stats"></span>',
-    };
-  }, []);
-
-  const getVisibilityStyle = (hiddenCondition) => {
-    if (hiddenCondition) {
-      return {
-        visibility: "hidden",
-        height: 0,
-      };
-    }
-    return {
-      visibility: "visible",
-      height: "inherit",
-    };
-  };
-
-  // SUBVIEWS
-  const detailCellRenderer = useMemo(() => {
-    return DetailCellRenderer;
-  }, []);
-
+  // agGrid passes these values to subGrid
   const detailCellRendererParams = {
     masterObject: selectedObject,
     masterGridRef: gridRef.current,
-    masterGridRowId: selectedGridRow.current,
-    // relationPreferences: relationPreferences,
+    relationPreferences: relationPreferences,
   };
 
   // use application id as the grid row id
   const getRowId = useCallback((params) => params.data.id, []);
 
-  const userRelations = async function () {
-    try {
-      const result = await gf.getRelationshipPreferences(userInfo);
-
-      if (result.status === "error") {
-        throw new Error("Error retrieving user relationship preferences");
-      }
-
-      return result.records;
-    } catch (error) {
-      // notify user of error
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      const key = enqueueSnackbar(error.message, snackOptions);
-    }
-  };
-
   return (
     <LoadingOverlay
       active={loadingIndicator}
-      spinner={<GridLoader />}
+      spinner={<DotLoader />}
       styles={{
         overlay: (base) => ({
           ...base,
@@ -2352,9 +2651,48 @@ export default function GridView() {
               <TextField {...params} label='Org Objects' variant='standard' />
             )}
             onChange={async (event, newValue) => {
-              setLoadingIndicator(true);
-
               console.log("Selected object changed");
+
+              let qbColumns = null;
+
+              let objMetadata = objectMetadata.find(
+                (f) => f.objName === newValue.id
+              );
+
+              if (objMetadata === undefined) {
+                // get object metadata
+                const metadataResult = await gf.getObjectMetadata(
+                  selectedObject.id,
+                  userInfo,
+                  objectMetadata
+                );
+
+                if (metadataResult.status !== "ok") {
+                  throw new Error(
+                    `Error retrieving metadata for ${selectedObject.id}`
+                  );
+                }
+
+                // store object metadata in global state
+                objMetadata = {
+                  objName: selectedObject.id,
+                  metadata: metadataResult.records,
+                };
+
+                dispatch(addMetadata(objMetadata));
+
+                // create QueryBuilder columns
+                qbColumns = await gf.createQueryBuilderColumns(
+                  objMetadata.metadata
+                );
+              } else {
+                // create QueryBuilder columns
+                qbColumns = await gf.createQueryBuilderColumns(
+                  objMetadata.metadata
+                );
+              }
+
+              dispatch(setQueryColumns(qbColumns));
 
               // store selected object in global state
               dispatch(setSelectedObject(newValue));
@@ -2375,7 +2713,7 @@ export default function GridView() {
               <TextField {...params} label='Templates' variant='standard' />
             )}
             onChange={async (event, newValue) => {
-              dispatch(setSelectedTemplate(newValue));
+              setSelectedTemplate(newValue);
               return;
             }}
             sx={{ ml: 5, width: 250 }}
@@ -2392,7 +2730,7 @@ export default function GridView() {
               <TextField {...params} label='Queries' variant='standard' />
             )}
             onChange={(event, newValue) => {
-              dispatch(setSelectedQuery(newValue));
+              setSelectedQuery(newValue);
               return;
             }}
             sx={{ ml: 5, width: 250 }}
@@ -2663,7 +3001,7 @@ export default function GridView() {
                       (m) => m.objName === selectedObject.id
                     );
                     if (objMetadata === undefined) {
-                      const a = 1;
+                      // const a = 1;
                     }
                     const metadataFields = objMetadata.metadata.fields;
                     const metadataField = metadataFields.find(
@@ -2675,7 +3013,7 @@ export default function GridView() {
                       case "boolean": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2693,7 +3031,7 @@ export default function GridView() {
                       case "currency": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2722,7 +3060,7 @@ export default function GridView() {
                       case "date": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2751,7 +3089,7 @@ export default function GridView() {
                       case "datetime": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2780,7 +3118,7 @@ export default function GridView() {
                       case "decimal": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2809,7 +3147,7 @@ export default function GridView() {
                       case "double": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2838,7 +3176,7 @@ export default function GridView() {
                       case "fax": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2861,7 +3199,7 @@ export default function GridView() {
                       case "id": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2884,7 +3222,7 @@ export default function GridView() {
                       case "int": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2913,7 +3251,7 @@ export default function GridView() {
                       case "long": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2942,7 +3280,7 @@ export default function GridView() {
                       case "percent": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2971,7 +3309,7 @@ export default function GridView() {
                       case "phone": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -2994,7 +3332,7 @@ export default function GridView() {
                       case "picklist": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -3013,7 +3351,7 @@ export default function GridView() {
                       case "reference": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
@@ -3031,7 +3369,7 @@ export default function GridView() {
                       case "string": {
                         return (
                           <ColumnDirective
-                            key={item.name}
+                            key={item.field}
                             field={item.field}
                             label={item.label}
                             operators={[
