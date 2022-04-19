@@ -345,7 +345,7 @@ export async function createGridField(metadataField, fieldMetadata) {
   const fieldName = metadataField.name;
 
   var numberValueFormatter = function (params) {
-    return params.value.toFixed(2);
+    return params.value ? params.value.toFixed(2) : null;
   };
 
   const dateValueFormatter = function (params) {
@@ -1593,7 +1593,7 @@ export async function getTemplateFields(selectedTemplate) {
     columns: columns,
     values: values,
     rowIds: [],
-    idField: null,
+    idField: "id",
   };
 
   try {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 
 // import { useSelector } from "react-redux";
 
@@ -14,10 +15,13 @@ import ChildGridView from "../../components/childGrid/childGridView";
 const DetailCellRenderer = (props) => {
   const masterObject = props.masterObject;
   const masterGridRef = props.masterGridRef;
-  const relationPreferences = props.relationPreferences;
+  // const relationPreferences = props.relationPreferences;
+  const selectedGridRow = props.data;
 
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = React.useState("");
+
+  const relationPreferences = useSelector((state) => state.relationPreferences);
 
   const handleChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -53,7 +57,9 @@ const DetailCellRenderer = (props) => {
 
     setTabs([...tabArray]);
 
-    // setSelectedTab(tabArray[0].value);
+    if (tabArray.length > 0) {
+      setSelectedTab(tabArray[0].value);
+    }
   }, [relationPreferences]);
 
   return (
@@ -78,6 +84,7 @@ const DetailCellRenderer = (props) => {
                 masterObject={masterObject}
                 childObject={tab.value}
                 masterGridRef={masterGridRef}
+                selectedGridRow={selectedGridRow}
               />
               )
             </TabPanel>

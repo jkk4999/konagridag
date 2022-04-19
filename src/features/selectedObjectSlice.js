@@ -8,7 +8,6 @@ export const selectedObjectSlice = createSlice({
   initialState,
   reducers: {
     setSelectedObject: (state, { payload }) => {
-      // mutate existing state
       return payload;
     },
   },

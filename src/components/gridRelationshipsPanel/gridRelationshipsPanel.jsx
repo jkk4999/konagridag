@@ -263,8 +263,8 @@ export default (props) => {
 
             // get selected relations
             relationshipGridRef.current.api.forEachNode((n) => {
-              rec = n.data;
-              if (rec.selected) {
+              const rec = { ...n.data };
+              if (rec.selected === true) {
                 selectedRelations.push(rec);
 
                 // get metadata if needed
@@ -279,19 +279,17 @@ export default (props) => {
                     const objMetadata = res.records;
 
                     const hasMetadata = objectMetadata.find(
-                      (f) => f.objName === rec
+                      (f) => f.objName === rec.id
                     );
 
                     // add metadata
                     if (hasMetadata === undefined) {
                       const newObjMetadata = {
-                        objName: selectedObject.id,
+                        objName: rec,
                         metadata: objMetadata,
                       };
 
-                      const newMetadata = [...objectMetadata, newObjMetadata];
-
-                      dispatch(addMetadata(newMetadata));
+                      dispatch(addMetadata(newObjMetadata));
                     }
                   })
                   .catch((error) => {

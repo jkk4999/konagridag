@@ -128,6 +128,7 @@ export default function GridView() {
   const jsonButton = useRef(null);
   const saveTemplateTextField = useRef(null);
   const saveQueryTextField = useRef(null);
+  const selectedGridRow = useRef(null);
   const sqlButton = useRef(null);
   const queryRuleContent = useRef(null);
   const queryBuilderRef = useRef(null);
@@ -158,8 +159,6 @@ export default function GridView() {
   const [objectOptions, setObjectOptions] = useState([]);
   const [templateOptions, setTemplateOptions] = useState([]);
   const [queryOptions, setQueryOptions] = useState([]);
-  const [selectedGridRow, setSelectedGridRow] = useState({});
-  // const [selectedObject, setSelectedObject] = useState({});
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedQuery, setSelectedQuery] = useState(null);
 
@@ -1067,6 +1066,8 @@ export default function GridView() {
         // update grid row state
         setRowData(queryData);
         setLoadingIndicator(false);
+
+        selectedGridRow.current = queryData[0];
       } catch (error) {
         setLoadingIndicator(false);
         console.log(error.message);
@@ -2225,7 +2226,7 @@ export default function GridView() {
   }
 
   function gridRowClicked(params) {
-    selectedGridRow.current = params.data.Id;
+    selectedGridRow.current = params.data;
   }
 
   // The client has set new data into the grid using api.setRowData() or by
@@ -2241,7 +2242,7 @@ export default function GridView() {
     const data = params.data;
     const rowIndex = params.rowIndex;
 
-    selectedGridRow.current = params.data[0].Id;
+    selectedGridRow.current = data;
   }
 
   // A cell's value within a row has changed. This event corresponds to Full Row Editing only.
@@ -2575,10 +2576,15 @@ export default function GridView() {
     masterObject: selectedObject,
     masterGridRef: gridRef.current,
     relationPreferences: relationPreferences,
+    // selectedGridRow: selectedGridRow.current,
   };
 
   // use application id as the grid row id
   const getRowId = useCallback((params) => params.data.id, []);
+
+  const onRowGroupOpened = (params) => {
+    // selectedGridRow.current = params.data;
+  };
 
   return (
     <LoadingOverlay
@@ -3485,6 +3491,7 @@ export default function GridView() {
               onCellValueChanged={gridCellValueChanged}
               onRowDataChanged={gridRowDataChanged}
               onRowClicked={gridRowClicked}
+              onRowGroupOpened={onRowGroupOpened}
               onRowSelected={gridRowSelected}
               onSelectionChanged={gridSelectionChanged}
               ref={gridRef}

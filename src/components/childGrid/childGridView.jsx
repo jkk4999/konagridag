@@ -79,13 +79,11 @@ function ChildGridView(props) {
   const { masterObject, childObject, masterGridRef, selectedGridRow } = props;
 
   // only allow 1 expanded row
-  masterGridRef.api.forEachNode((node) => {
-    if (node.data.Id !== selectedGridRow.Id) {
-      node.setExpanded(false);
-    } else {
-      node.setExpanded(true);
-    }
-  });
+  // masterGridRef.api.forEachNode((node) => {
+  //   if (node.data.Id !== selectedGridRow.Id) {
+  //     node.setExpanded(false);
+  //   }
+  // });
 
   const classes = useStyles();
 
@@ -96,13 +94,18 @@ function ChildGridView(props) {
   const dispatch = useDispatch();
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
-  const gridViewState = useSelector((state) => state.childGridState);
+  // const gridViewState = useSelector((state) => state.childGridState);
 
   // local state// previous state values
-  const prevViewState = useRef([]);
+
+  const [rowData, setRowData] = useState([]);
+  const prevRowData = useRef(null);
+  const [colDefs, setColDefs] = useState([]);
+  const prevColDefs = useRef(null);
+  const [templateOptions, setTemplateOptions] = useState(null);
 
   // get the child grid state
-  const viewState = gridViewState.find((s) => s.childGrid === childObject);
+  // const viewState = gridViewState.find((s) => s.childGrid === childObject);
 
   // local object references
   const gridRef = useRef(null);
@@ -473,11 +476,27 @@ function ChildGridView(props) {
         return;
       }
 
+      // get current template owner
       let templateRec = null;
+      if (!selectedTemplate) {
+        const templateUrl = "/postgres/knexSelect";
+        const templateResult = await gf.getTemplate(
+          selectedTemplate.id,
+          userInfo
+        );
+        if (templateResult.status !== "ok") {
+          throw new Error(
+            `onSaveTemplateForm() - ${templateResult.errorMessage}`
+          );
+        }
+
+        // always returns 1 record
+        templateRec = templateResult.records[0];
+      }
 
       if (
-        !viewState.selectedTemplate ||
-        viewState.selectedTemplate.label !== templateNameInput.current ||
+        !selectedTemplate ||
+        selectedTemplate.label !== templateNameInput.current ||
         templateRec.owner !== userInfo.userEmail
       ) {
         /* create new template when:
@@ -490,12 +509,11 @@ function ChildGridView(props) {
           childObject,
           templateVisibility,
           userInfo,
-          viewState,
           saveTemplateGridRef
         );
       } else {
         // update existing template
-        updateExistingTemplate(childObject, viewState, saveTemplateGridRef);
+        updateExistingTemplate(childObject, saveTemplateGridRef);
       }
     } catch (error) {
       console.log(error.message);
@@ -559,9 +577,9 @@ function ChildGridView(props) {
 
     try {
       // get the selected template and determine if the current user is the owner
-      if (viewState.selectedTemplate) {
+      if (selectedTemplate) {
         const templateResult = await gf.getTemplate(
-          viewState.selectedTemplate.id,
+          selectedTemplate.id,
           userInfo
         );
 
@@ -574,7 +592,7 @@ function ChildGridView(props) {
 
         templateNameInput.current = "";
         if (templateRec.owner === userInfo.userEmail) {
-          templateNameInput.current = viewState.selectedTemplate.label;
+          templateNameInput.current = selectedTemplate.label;
         }
       } else {
         // no templates found
@@ -731,32 +749,24 @@ function ChildGridView(props) {
   }
 
   useEffect(() => {
-    /*  when no view state for this view exists
+    /*  when no column defs exist
       1 - load the template options
       2 - set selected template based on preferences or defaults
+      3 - create the grid columns
   */
 
-    if (viewState !== undefined) {
-      return;
-    }
-
     const configureGrid = async () => {
+      if (_.isEqual(colDefs, prevColDefs.current)) {
+        return;
+      }
+
       console.log(`Configuring child grid ${childObject}`);
+
+      let currentTemplate = null;
 
       setLoadingIndicator(true);
 
       let gridCols = [];
-
-      // if viewState hasn't changed, do nothing
-      // if (_.isEqual(viewState, prevViewState.current)) {
-      //   setLoadingIndicator(false);
-      //   return;
-      // }
-
-      // create the state
-      const newState = {
-        childGrid: childObject,
-      };
 
       try {
         // get template records
@@ -781,7 +791,7 @@ function ChildGridView(props) {
           tmpOptions.push(newOpt);
         });
 
-        newState.templateOptions = tmpOptions;
+        setTemplateOptions(tmpOptions);
 
         // check for grid preferences
         const prefResult = await gf.getGridPreferences(
@@ -812,7 +822,8 @@ function ChildGridView(props) {
           const tmpOption = tmpOptions.find((o) => o.id === templatePrefId);
 
           // use this template
-          newState.selectedTemplate = tmpOption;
+          setSelectedTemplate(tmpOption);
+          currentTemplate = { ...tmpOption };
         }
 
         // if no preferences, check for defaults
@@ -850,12 +861,14 @@ function ChildGridView(props) {
             (t) => t.id === Number(defaultTemplate.id)
           );
 
-          newState.selectedTemplate = defaultTemplateOption;
+          setSelectedTemplate(defaultTemplateOption);
+          currentTemplate = { ...defaultTemplateOption };
         }
 
         if (defaultTemplates.length === 0 && tmpOptions.length > 0) {
           // no default template, so pick the first template
-          newState.selectedTemplate = tmpOptions[0];
+          setSelectedTemplate(tmpOptions[0]);
+          currentTemplate = { ...tmpOptions[0] };
         }
 
         if (tmpOptions.length === 0) {
@@ -867,11 +880,14 @@ function ChildGridView(props) {
             objectMetadata
           );
 
-          newState.colDefs = defaultGridCols;
+          setColDefs(defaultGridCols);
+          prevColDefs.current = defaultGridCols;
+
+          return;
         }
 
-        if (newState.selectedTemplate) {
-          const result = await gf.getTemplateFields(newState.selectedTemplate);
+        if (currentTemplate) {
+          const result = await gf.getTemplateFields(currentTemplate);
 
           if (result.status === "error") {
             throw new Error("Error retrieving temmplate fields");
@@ -885,15 +901,26 @@ function ChildGridView(props) {
             gridRef
           );
 
-          newState.colDefs = gridCols;
+          setColDefs(gridCols);
+          prevColDefs.current = gridCols;
         }
 
-        // store the view state
-        prevViewState.current = { ...newState };
+        // get the data
+        const whereClause = `${masterObject.id}Id = '${selectedGridRow.Id}'`;
+
+        const response = await gf.runQuery(childObject, whereClause);
+
+        if (response.status === "error") {
+          throw new Error(
+            `Error retrieving related records for ${childObject}`
+          );
+        }
+
+        const data = response.records[0];
+        setRowData(data);
+        prevRowData.current = data;
 
         setLoadingIndicator(false);
-
-        dispatch(addGridState(newState));
       } catch (error) {
         setLoadingIndicator(false);
 
@@ -916,22 +943,13 @@ function ChildGridView(props) {
     };
 
     configureGrid();
-  }, [
-    viewState,
-    childObject,
-    dispatch,
-    objectMetadata,
-    userInfo,
-    enqueueSnackbar,
-  ]);
+  }, [childObject, dispatch, objectMetadata, userInfo, enqueueSnackbar]);
 
   useEffect(() => {
     // get the data when the selected row changes
 
     const getData = async () => {
-      // if viewState hasn't changed, do nothing
-      if (_.isEqual(viewState, prevViewState.current)) {
-        setLoadingIndicator(false);
+      if (_.isEqual(rowData, prevRowData)) {
         return;
       }
 
@@ -948,26 +966,12 @@ function ChildGridView(props) {
 
       setLoadingIndicator(false);
 
-      // update the view state
-      const newState = { ...viewState };
-      newState.rowData = data;
-      newState.selectedGridRow = selectedGridRow;
-      dispatch(addGridState(newState));
-
-      prevViewState.current = newState;
+      setRowData(data);
+      prevRowData.current = data;
     };
 
     getData();
-  }, [selectedGridRow, childObject, dispatch, masterObject.id, viewState]);
-
-  // compare arrays
-  // function getDifference(array1, array2) {
-  //   return array1.filter((object1) => {
-  //     return !array2.some((object2) => {
-  //       return object1.id === object2.id;
-  //     });
-  //   });
-  // }
+  }, [selectedGridRow, childObject, dispatch, masterObject.id]);
 
   const autoGroupColumnDef = useMemo(() => {
     return {
@@ -1105,8 +1109,8 @@ function ChildGridView(props) {
           id='templateSelector'
           autoComplete
           includeInputInList
-          options={viewState === undefined ? [] : viewState.templateOptions}
-          value={viewState === undefined ? "" : viewState.selectedTemplate}
+          options={templateOptions}
+          value={selectedTemplate}
           ref={templateSelectorRef}
           renderInput={(params) => (
             <TextField {...params} label='Templates' variant='standard' />
@@ -1124,14 +1128,14 @@ function ChildGridView(props) {
             animateRows={true}
             autoGroupColumnDef={autoGroupColumnDef}
             defaultColDef={defaultColDef}
-            columnDefs={viewState === undefined ? [] : viewState.colDefs}
+            columnDefs={colDefs}
             columnTypes={columnTypes}
             enableColResize='true'
             getRowId={getRowId}
             groupDisplayType={"singleColumn"}
             onFirstDataRendered={onFirstDataRendered}
             ref={gridRef}
-            rowData={viewState === undefined ? [] : viewState.rowData}
+            rowData={rowData}
             rowBuffer={100}
             rowGroupPanelShow={"always"}
             rowSelection='multiple'
