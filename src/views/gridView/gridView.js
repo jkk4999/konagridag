@@ -12,6 +12,9 @@ import { useSelector, useDispatch } from "react-redux";
 import LoadingOverlay from "react-loading-overlay-ts";
 import DotLoader from "react-spinners/DotLoader";
 
+// save template dialog
+import SaveTemplateDialog from "../../components/saveTemplateDialog/saveTemplateDialog";
+
 // Lodash
 import _ from "lodash";
 
@@ -173,12 +176,11 @@ export default function GridView() {
   const [saveQueryText, setSaveQueryText] = useState("");
   const [saveTemplateText, setSaveTemplateText] = useState("");
 
-  // template form local state
-  const [templateFormHeader, setTemplateFormHeader] = useState("");
-  const [templateFormFields, setTemplateFormFields] = useState([]);
-  const [templateFormData, setTemplateFormData] = useState([]);
-  const [templateFormOpen, setTemplateFormOpen] = useState(false);
-  const templateNameInput = useRef("");
+  // save template form
+  const [saveTemplateGridCols, setSaveTemplateGridCols] = useState([]);
+  const [saveTemplateGridData, setSaveTemplateGridData] = useState([]);
+  const [saveTemplateFormOpen, setSaveTemplateFormOpen] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState("");
   const templateVisibility = useRef(false);
 
   const sidebarSize = useSelector((state) => state.sidebarSize);
@@ -1565,455 +1567,6 @@ export default function GridView() {
 
   // TEMPLATE FUNCTIONS
 
-  function TemplateGridRecs() {
-    // used in save template dialog
-    // checkbox value is false for non-admin users
-    let checkboxVal = false;
-
-    // enable the Public/Private checkbox for admins
-    let disableCheckbox = true;
-    if (userInfo.profileName === "System Administrator") {
-      disableCheckbox = false;
-    }
-
-    templateNameInput.current = selectedTemplate.label;
-
-    return (
-      <Box
-        className='ag-theme-alpine'
-        sx={{
-          width: 800,
-          height: 400,
-          mt: 2,
-        }}
-      >
-        <Stack direction='row'>
-          <TextField
-            sx={{
-              mb: 2,
-              width: 300,
-            }}
-            id='templateNameInput'
-            label='Template Name'
-            variant='standard'
-            defaultValue={templateNameInput.current}
-            size='small'
-            required
-            onChange={(e) => {
-              templateNameInput.current = e.target.value;
-            }}
-          />
-          <FormControlLabel
-            control={<Checkbox size='small' />}
-            label='Public'
-            ref={templateVisibilityRef}
-            sx={{
-              ml: 4,
-            }}
-            disabled={disableCheckbox}
-            onChange={(e) => {
-              // store value in useRef - needed when creating new templates
-              templateVisibility.current = e.target.checked;
-            }}
-          />
-        </Stack>
-
-        <AgGridReact
-          animateRows={true}
-          columnDefs={templateFormFields}
-          defaultColDef={defaultColDef}
-          ref={saveTemplateGridRef}
-          rowData={templateFormData}
-        ></AgGridReact>
-      </Box>
-    );
-  }
-
-  async function onSaveTemplateClose(args) {
-    setTemplateFormOpen(false);
-  }
-
-  async function onSaveTemplateForm(args) {
-    try {
-      const { api, columnApi } = saveTemplateGridRef.current;
-
-      const templateName = templateNameInput.current;
-
-      if (templateName === "") {
-        // prompt user for template name
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar("Please enter a template name", snackOptions);
-        return;
-      }
-
-      // get current template owner
-      const templateUrl = "/postgres/knexSelect";
-      const templateResult = await gf.getTemplate(
-        selectedTemplate.id,
-        userInfo
-      );
-      if (templateResult.status !== "ok") {
-        throw new Error(
-          `onSaveTemplateForm() - ${templateResult.errorMessage}`
-        );
-      }
-
-      // always returns 1 record
-      const templateRec = templateResult.records[0];
-
-      /* template rules order
-
-        1 - non-admin users can only create private templates
-
-        2 - only the owner of the template can update it
-        
-        3 - if the templateInputName is different from the selectedTemplate name
-        then create a new template, else update existing template
-
-        4 - if a non-admin user is not the owner of the template, then
-        create a private template
-
-        5 - if an admin user is not the owner of the template, then create
-        a new template which has visibility determined by the public checkbox.
-        the public checkbox is enabled for sys admins only
-
-      */
-
-      if (
-        selectedTemplate.label !== templateNameInput.current ||
-        templateRec.owner !== userInfo.userEmail
-      ) {
-        // create a new template
-
-        const tmpResult = await gf.createTemplate(
-          templateName,
-          selectedObject,
-          templateVisibility.current,
-          userInfo
-        );
-
-        if (tmpResult.status === "error") {
-          throw new Error("Error creating template");
-        }
-
-        const newTemplate = tmpResult.records[0];
-        const newTemplateId = newTemplate.id;
-
-        // get the template recs from the grid
-        const templateRecs = saveTemplateGridRef.current.props.rowData;
-
-        // change templateid to the new value
-        templateRecs.forEach((t) => {
-          t.templateid = newTemplateId;
-        });
-
-        const insertUrl = "/postgres/knexInsert";
-
-        const insertPayload = {
-          table: "template_field",
-          values: templateRecs,
-          key: "id",
-        };
-
-        const insertResponse = await fetch(insertUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(insertPayload),
-        });
-
-        if (!insertResponse.ok) {
-          throw new Error(
-            `onSaveTemplateForm() - error inserting template fields`
-          );
-        }
-
-        let insertResult = await insertResponse.json();
-
-        // adds the template to the grid template selector options
-        let templateOps = [...templateOptions];
-        const newTemplateOption = {
-          id: newTemplate.id,
-          label: newTemplate.template_name,
-        };
-        templateOps.push(newTemplateOption);
-        dispatch(setTemplateOptions(templateOps));
-
-        // select the new template option
-        dispatch(setSelectedTemplate(newTemplateOption));
-      } else {
-        // update existing template
-
-        // delete existing template fields
-        const delResult = await gf.deleteTemplateFields(selectedTemplate);
-
-        if (delResult.status !== "ok") {
-          throw new Error(
-            "onSaveTemplateForm() - error deleting template fields"
-          );
-        }
-
-        const deletedRecs = delResult.records;
-
-        // get the template recs from the grid
-        const templateRecs = saveTemplateGridRef.current.props.rowData;
-
-        const insertUrl = "/postgres/knexInsert";
-
-        const insertPayload = {
-          table: "template_field",
-          values: templateRecs,
-          key: "id",
-        };
-
-        const insertResponse = await fetch(insertUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(insertPayload),
-        });
-
-        if (!insertResponse.ok) {
-          throw new Error(
-            `onSaveTemplateForm() - error inserting template fields`
-          );
-        }
-
-        let insertResult = await insertResponse.json();
-
-        // refresh the template
-
-        // get the template fields for selected template
-        const templateFieldResult = await gf.getTemplateFields(
-          selectedTemplate
-        );
-
-        if (templateFieldResult.status === "error") {
-          throw new Error(
-            `onSaveTemplateForm() - ${templateFieldResult.errorMessage}`
-          );
-        }
-
-        const templateFieldData = templateFieldResult.records;
-
-        // create the grid columns
-        const gridCols = await gf.createGridColumns(
-          selectedObject.id,
-          templateFieldData,
-          objectMetadata,
-          gridRef
-        );
-
-        setColumnDefs(gridCols);
-      }
-
-      // notify user
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Template Saved", snackOptions);
-    } catch (error) {
-      console.log(error.message);
-
-      // notify user
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar(error.message, snackOptions);
-    }
-
-    setTemplateFormOpen(false);
-  }
-
-  function onCloseTemplateForm() {
-    setTemplateFormOpen(false);
-  }
-
-  async function openSaveTemplateForm() {
-    // get the visible grid columns
-    const visibleColumns = [];
-    const gridColumns = gridRef.current.columnApi.getAllGridColumns();
-    gridColumns.forEach((g) => {
-      // get column def
-      const def = gridRef.current.columnApi.getColumn(g.colId);
-      if (
-        def.colDef.field &&
-        (def.visible || def.colDef.rowGroup || def.rowGroupActive)
-      ) {
-        visibleColumns.push(g);
-      }
-    });
-
-    // create the template records
-    const templateRecs = gf.createSaveTemplateRecords(
-      selectedObject.id,
-      visibleColumns,
-      objectMetadata,
-      selectedTemplate
-    );
-
-    // create the save template grid columns
-    const saveTemplateGridCols = [
-      {
-        field: "name",
-        headerName: "Name",
-        editable: false,
-        minWidth: 200,
-        pinned: "left",
-      },
-      {
-        field: "sort",
-        headerName: "Sort",
-        cellEditor: "agRichSelectCellEditor",
-        cellEditorPopup: true,
-        cellEditorParams: {
-          values: ["", "asc", "desc"],
-          cellHeight: 30,
-          searchDebounceDelay: 500,
-          formatValue: (value) => value.text,
-        },
-        editable: true,
-        filterParams: {
-          // can be 'windows' or 'mac'
-          excelMode: "mac",
-        },
-        resizable: false,
-        width: 125,
-      },
-      {
-        field: "split",
-        headerName: "Split",
-        cellRenderer: AgGridCheckbox,
-        editable: true,
-        filterParams: {
-          excelMode: "mac",
-        },
-        resizable: false,
-        width: 125,
-      },
-      {
-        field: "group",
-        headerName: "Group",
-        cellRenderer: AgGridCheckbox,
-        editable: true,
-        filterParams: {
-          excelMode: "mac",
-        },
-        resizable: false,
-        width: 125,
-      },
-      {
-        field: "aggregation",
-        headerName: "Agg Func",
-        cellEditor: "agRichSelectCellEditor",
-        cellEditorPopup: true,
-        cellEditorParams: {
-          values: ["", "sum", "min", "max", "avg", "count"],
-          cellHeight: 30,
-          searchDebounceDelay: 500,
-          formatValue: (value) => value.text,
-        },
-        editable: true,
-        filterParams: {
-          // can be 'windows' or 'mac'
-          excelMode: "mac",
-        },
-        resizable: false,
-        width: 150,
-      },
-      {
-        field: "sort_index",
-        headerName: "Sort Index",
-        hide: true,
-        resizable: false,
-        width: 150,
-      },
-      {
-        field: "filter",
-        headerName: "Filter",
-        cellRenderer: AgGridCheckbox,
-        editable: true,
-        filterParams: {
-          excelMode: "mac",
-        },
-        hide: true,
-        resizable: false,
-        width: 100,
-      },
-      {
-        field: "column_order",
-        headerName: "Column Order",
-        editable: false,
-        hide: true,
-        resizable: false,
-        minWidth: 150,
-      },
-      {
-        field: "templateid",
-        headerName: "Template Id",
-        editable: false,
-        hide: true,
-        resizable: false,
-        minWidth: 100,
-      },
-      {
-        field: "datatype",
-        headerName: "Data Type",
-        editable: false,
-        hide: true,
-        resizable: false,
-        minWidth: 150,
-      },
-    ];
-
-    // opens the save template dialog form
-    setTemplateFormFields(saveTemplateGridCols);
-    setTemplateFormData(templateRecs);
-    setTemplateFormHeader("Save Template");
-    setTemplateFormOpen(true);
-  }
-
-  function SaveTemplateDialog() {
-    return (
-      <Dialog open={templateFormOpen} fullWidth={true} maxWidth='md'>
-        <DialogTitle>Save Tempate</DialogTitle>
-        <DialogContent>
-          {/* <DialogContentText>Select template configuration</DialogContentText> */}
-          <TemplateGridRecs />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onCloseTemplateForm}>Cancel</Button>
-          <Button onClick={onSaveTemplateForm}>Save</Button>
-        </DialogActions>
-      </Dialog>
-    );
-  }
-
   async function saveTemplate() {
     // called from Grid toolbar
 
@@ -2037,33 +1590,170 @@ export default function GridView() {
 
     try {
       // get the selected template and determine if the current user is the owner
-      const templateUrl = "/postgres/knexSelect";
-      const templateResult = await gf.getTemplate(
-        selectedTemplate.id,
-        userInfo
-      );
-      if (templateResult.status !== "ok") {
-        throw new Error(
-          `gridView-saveTemplate() - ${templateResult.errorMessage}`
-        );
-      }
-
-      // always returns 1 record
-      const templateRec = templateResult.records[0];
-
       let templateName = "";
-      if (templateRec.owner !== userInfo.userEmail) {
-        // save as private template
-        const tName = (templateNameInput.current = "");
-        openSaveTemplateForm(tName);
-        return;
+
+      if (selectedTemplate) {
+        const templateUrl = "/postgres/knexSelect";
+        const templateResult = await gf.getTemplate(
+          selectedTemplate.id,
+          userInfo
+        );
+        if (templateResult.status !== "ok") {
+          throw new Error(
+            `gridView-saveTemplate() - ${templateResult.errorMessage}`
+          );
+        }
+
+        // always returns 1 record
+        const templateRec = templateResult.records[0];
+
+        if (templateRec.owner === userInfo.userEmail) {
+          setSaveTemplateName(templateRec.template_name);
+        } else {
+          setSaveTemplateName("");
+        }
       }
 
-      // user is owner of template
-      const tName = (templateNameInput.current = selectedTemplate);
-      openSaveTemplateForm(tName);
+      // get the visible grid columns
+      const visibleColumns = [];
+      const gridColumns = gridRef.current.columnApi.getAllGridColumns();
+      gridColumns.forEach((g) => {
+        // get column def
+        const def = gridRef.current.columnApi.getColumn(g.colId);
+        if (
+          def.colDef.field &&
+          (def.visible || def.colDef.rowGroup || def.rowGroupActive)
+        ) {
+          visibleColumns.push(g);
+        }
+      });
 
-      return;
+      // create the template records
+      const templateRecs = gf.createSaveTemplateRecords(
+        selectedObject.id,
+        visibleColumns,
+        objectMetadata,
+        selectedTemplate
+      );
+
+      // create the save template grid columns
+      const saveTemplateGridCols = [
+        {
+          field: "name",
+          headerName: "Name",
+          editable: false,
+          minWidth: 200,
+          pinned: "left",
+        },
+        {
+          field: "sort",
+          headerName: "Sort",
+          cellEditor: "agRichSelectCellEditor",
+          cellEditorPopup: true,
+          cellEditorParams: {
+            values: ["", "asc", "desc"],
+            cellHeight: 30,
+            searchDebounceDelay: 500,
+            formatValue: (value) => value.text,
+          },
+          editable: true,
+          filterParams: {
+            // can be 'windows' or 'mac'
+            excelMode: "mac",
+          },
+          resizable: false,
+          width: 125,
+        },
+        {
+          field: "split",
+          headerName: "Split",
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          filterParams: {
+            excelMode: "mac",
+          },
+          resizable: false,
+          width: 125,
+        },
+        {
+          field: "group",
+          headerName: "Group",
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          filterParams: {
+            excelMode: "mac",
+          },
+          resizable: false,
+          width: 125,
+        },
+        {
+          field: "aggregation",
+          headerName: "Agg Func",
+          cellEditor: "agRichSelectCellEditor",
+          cellEditorPopup: true,
+          cellEditorParams: {
+            values: ["", "sum", "min", "max", "avg", "count"],
+            cellHeight: 30,
+            searchDebounceDelay: 500,
+            formatValue: (value) => value.text,
+          },
+          editable: true,
+          filterParams: {
+            // can be 'windows' or 'mac'
+            excelMode: "mac",
+          },
+          resizable: false,
+          width: 150,
+        },
+        {
+          field: "sort_index",
+          headerName: "Sort Index",
+          hide: true,
+          resizable: false,
+          width: 150,
+        },
+        {
+          field: "filter",
+          headerName: "Filter",
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          filterParams: {
+            excelMode: "mac",
+          },
+          hide: true,
+          resizable: false,
+          width: 100,
+        },
+        {
+          field: "column_order",
+          headerName: "Column Order",
+          editable: false,
+          hide: true,
+          resizable: false,
+          minWidth: 150,
+        },
+        {
+          field: "templateid",
+          headerName: "Template Id",
+          editable: false,
+          hide: true,
+          resizable: false,
+          minWidth: 100,
+        },
+        {
+          field: "datatype",
+          headerName: "Data Type",
+          editable: false,
+          hide: true,
+          resizable: false,
+          minWidth: 150,
+        },
+      ];
+
+      // opens the save template dialog form
+      setSaveTemplateGridCols(saveTemplateGridCols);
+      setSaveTemplateGridData(templateRecs);
+      setSaveTemplateFormOpen(true);
     } catch (error) {
       console.log(error.message);
       return;
@@ -2345,10 +2035,6 @@ export default function GridView() {
     setOpenSaveDialog(true);
   };
 
-  const handleSaveTemplateOpen = () => {
-    setOpenSaveTemplateDialog(true);
-  };
-
   async function handleSaveQueryClose(e) {
     setOpenSaveDialog(false);
     const queryName = saveQueryText;
@@ -2424,78 +2110,8 @@ export default function GridView() {
     setQueryRuleText(queryContent);
   }
 
-  async function handleSaveTemplateClose(e) {
-    // save a new template
-    setOpenSaveTemplateDialog(false);
-    const templateName = saveTemplateTextField;
-
-    // save a new template
-    const insertUrl = "/postgres/knexInsert";
-
-    const insertColumns = [
-      "template_name",
-      "owner",
-      "is_active",
-      "object",
-      "is_public",
-      "is_related",
-      "default",
-      "orgid",
-    ];
-
-    const insertValues = {
-      template_name: templateName,
-      owner: userInfo.userEmail,
-      is_active: true,
-      object: selectedObject.id,
-      is_public: false,
-      is_related: false,
-      default: false,
-      orgid: userInfo.organizationId,
-    };
-
-    const insertPayload = {
-      table: "template",
-      columns: insertColumns,
-      values: insertValues,
-      key: "id",
-    };
-
-    const insertResponse = await fetch(insertUrl, {
-      method: "post",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(insertPayload),
-    });
-
-    if (!insertResponse.ok) {
-      throw new Error(`gridView-saveTemplate() - ${insertResponse.message}`);
-    }
-
-    let insertResult = await insertResponse.json();
-    const newTemplate = insertResult.records[0];
-
-    // notify user
-    const snackOptions = {
-      variant: "success",
-      autoHideDuration: 5000,
-      anchorOrigin: {
-        vertical: "top",
-        horizontal: "right",
-      },
-      TransitionComponent: Slide,
-    };
-
-    enqueueSnackbar("Template Saved", snackOptions);
-  }
-
   const handleCancelQueryClose = (e) => {
     setOpenSaveDialog(false);
-  };
-
-  const handleCancelTemplateClose = (e) => {
-    setOpenSaveTemplateDialog(false);
   };
 
   // Implementation of Query setTextValue method
@@ -2613,32 +2229,20 @@ export default function GridView() {
         }}
         className={classes.gridStyle}
       >
-        <Dialog open={openSaveDialog} onClose={handleSaveQueryClose}>
-          <DialogTitle>Save Query</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Only query owner can make changes to this query. Enter a query
-              name to save as a private query.
-            </DialogContentText>
-            <TextField
-              ref={saveQueryTextField}
-              autoFocus
-              margin='dense'
-              id='name'
-              label='Name'
-              type='text'
-              fullWidth
-              variant='standard'
-              onChange={setQueryTextValue}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCancelQueryClose}>Cancel</Button>
-            <Button onClick={handleSaveQueryClose}>Save</Button>
-          </DialogActions>
-        </Dialog>
-
-        <SaveTemplateDialog />
+        <SaveTemplateDialog
+          saveTemplateFormOpen={saveTemplateFormOpen}
+          setSaveTemplateFormOpen={setSaveTemplateFormOpen}
+          templateName={saveTemplateName}
+          templateColumns={saveTemplateGridCols}
+          gridData={saveTemplateGridData}
+          selectedTemplate={selectedTemplate}
+          setSelectedTemplate={setSelectedTemplate}
+          selectedObject={selectedObject}
+          templateOptions={templateOptions}
+          setTemplateOptions={setTemplateOptions}
+          setColumnDefs={setColumnDefs}
+          gridRef={gridRef}
+        />
 
         {/* object, template & query selectors */}
         <Toolbar
