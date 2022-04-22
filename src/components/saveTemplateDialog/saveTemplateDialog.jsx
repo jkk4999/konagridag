@@ -89,6 +89,9 @@ function SaveTemplateDialog(props) {
     };
   }, []);
 
+  // set initial value of templateInput to prop value
+  templateNameInput.current = templateName;
+
   async function onSaveTemplateForm(args) {
     try {
       const { api, columnApi } = saveTemplateGridRef.current;
@@ -275,7 +278,7 @@ function SaveTemplateDialog(props) {
 
         // create the grid columns
         const gridCols = await gf.createGridColumns(
-          selectedObject.id,
+          selectedObject,
           templateFieldData,
           objectMetadata,
           gridRef

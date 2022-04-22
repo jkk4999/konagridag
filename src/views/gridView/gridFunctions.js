@@ -297,7 +297,7 @@ export async function createTemplate(
     orgid: userInfo.organizationId,
     owner: userInfo.userEmail,
     is_active: true,
-    object: selectedObject.id,
+    object: selectedObject,
     is_public: templateVisibility,
     is_related: false,
     default: false,

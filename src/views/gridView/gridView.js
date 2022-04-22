@@ -2162,6 +2162,7 @@ export default function GridView() {
 
   console.log("Rendering View");
 
+  // configures tool panels
   const sideBar = useMemo(() => {
     return {
       toolPanels: [
@@ -2177,7 +2178,7 @@ export default function GridView() {
           labelDefault: "Relationships",
           labelKey: "relationships",
           iconKey: "custom-stats",
-          width: 385,
+          width: 550,
           toolPanel: GridRelationshipsPanel,
           toolPanelParams: {
             selectedObject: selectedObject,
@@ -2192,7 +2193,6 @@ export default function GridView() {
     masterObject: selectedObject,
     masterGridRef: gridRef.current,
     relationPreferences: relationPreferences,
-    // selectedGridRow: selectedGridRow.current,
   };
 
   // use application id as the grid row id
@@ -2237,7 +2237,7 @@ export default function GridView() {
           gridData={saveTemplateGridData}
           selectedTemplate={selectedTemplate}
           setSelectedTemplate={setSelectedTemplate}
-          selectedObject={selectedObject}
+          selectedObject={selectedObject ? selectedObject.id : null}
           templateOptions={templateOptions}
           setTemplateOptions={setTemplateOptions}
           setColumnDefs={setColumnDefs}

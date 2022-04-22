@@ -193,10 +193,34 @@ export default (props) => {
           filter: true,
           headerName: "Selected",
           sortable: true,
-          width: 150,
+          width: 125,
         };
 
         gridCols.push(selectedCol);
+
+        const ganttViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "ganttView",
+          filter: true,
+          headerName: "Gantt",
+          sortable: true,
+          width: 100,
+        };
+
+        gridCols.push(ganttViewCol);
+
+        const timeSeriesViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "timeSeriesView",
+          filter: true,
+          headerName: "Time Series",
+          sortable: true,
+          width: 125,
+        };
+
+        gridCols.push(ganttViewCol);
 
         // supply column definitions to grid
         setColDefs(gridCols);
@@ -228,7 +252,7 @@ export default (props) => {
     <Stack style={{ textAlign: "center", height: "100%" }}>
       <Box
         className='ag-theme-alpine'
-        style={{ height: "100%", width: 355 }}
+        style={{ height: "100%", width: "500px" }}
         sx={{
           ml: 2,
           mr: 5,
@@ -285,7 +309,7 @@ export default (props) => {
                     // add metadata
                     if (hasMetadata === undefined) {
                       const newObjMetadata = {
-                        objName: rec,
+                        objName: rec.id,
                         metadata: objMetadata,
                       };
 
