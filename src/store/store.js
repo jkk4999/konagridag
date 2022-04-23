@@ -11,6 +11,7 @@ import loginSlice from "../features/loginSlice";
 import objectListReducer from "../features/objectListSlice";
 import objectOptionsReducer from "../features/objectOptionsSlice";
 import objectMetadataReducer from "../features/objectMetadataSlice";
+import objectPreferencesReducer from "../features/objectPreferencesSlice";
 import queryBuilderVisabilityReducer from "../features/queryBuilderVisabilitySlice";
 import queryPanelVisabilityReducer from "../features/queryPanelVisabilitySlice";
 import queryListReducer from "../features/queryListSlice";
@@ -59,6 +60,7 @@ export default configureStore({
     objectList: objectListReducer,
     objectOptions: objectOptionsReducer,
     objectMetadata: objectMetadataReducer,
+    objectPreferences: objectPreferencesReducer,
     query: selectedQueryReducer,
     queryBuilderVisible: queryBuilderVisabilityReducer,
     queryPanelVisible: queryPanelVisabilityReducer,

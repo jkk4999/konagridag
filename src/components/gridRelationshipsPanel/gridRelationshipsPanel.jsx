@@ -100,7 +100,7 @@ export default (props) => {
 
         const relationships = result.records;
 
-        // create the relationship grid records
+        // create a record for each relationship
         const relArray = [];
 
         relationships.forEach((r) => {
@@ -156,14 +156,16 @@ export default (props) => {
 
           const allPrefs = prefRec.preferences; // array of json
 
-          // get the preferences for the selected object
+          // get the relation preferences for the selected object
           const objPref = allPrefs.find((f) => f.object === selectedObject.id);
 
           if (objPref) {
             objPref.relations.forEach((r) => {
               // find the relation in the relation grid
               const rec = relArray.find((f) => f.id === r.obj);
-              rec.selected = true;
+              if (rec) {
+                rec.selected = true;
+              }
             });
           }
         }
@@ -198,30 +200,6 @@ export default (props) => {
 
         gridCols.push(selectedCol);
 
-        const ganttViewCol = {
-          cellRenderer: AgGridCheckbox,
-          editable: true,
-          field: "ganttView",
-          filter: true,
-          headerName: "Gantt",
-          sortable: true,
-          width: 100,
-        };
-
-        gridCols.push(ganttViewCol);
-
-        const timeSeriesViewCol = {
-          cellRenderer: AgGridCheckbox,
-          editable: true,
-          field: "timeSeriesView",
-          filter: true,
-          headerName: "Time Series",
-          sortable: true,
-          width: 125,
-        };
-
-        gridCols.push(ganttViewCol);
-
         // supply column definitions to grid
         setColDefs(gridCols);
       } catch (error) {
@@ -252,7 +230,7 @@ export default (props) => {
     <Stack style={{ textAlign: "center", height: "100%" }}>
       <Box
         className='ag-theme-alpine'
-        style={{ height: "100%", width: "500px" }}
+        style={{ height: "100%", width: "580px" }}
         sx={{
           ml: 2,
           mr: 5,
@@ -287,6 +265,7 @@ export default (props) => {
 
             // get selected relations
             relationshipGridRef.current.api.forEachNode((n) => {
+              // a relationship record
               const rec = { ...n.data };
               if (rec.selected === true) {
                 selectedRelations.push(rec);
@@ -335,7 +314,9 @@ export default (props) => {
 
             const objRelationships = [];
             selectedRelations.forEach((r) => {
-              objRelationships.push({ "obj": r.id });
+              objRelationships.push({
+                "obj": r.id,
+              });
             });
 
             let values = null;

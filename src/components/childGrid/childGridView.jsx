@@ -92,6 +92,7 @@ function ChildGridView(props) {
 
   // local state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [prevSelectedTemplate, setPrevSelectedTemplate] = useState(null);
 
   // redux global state
   const dispatch = useDispatch();
@@ -110,6 +111,9 @@ function ChildGridView(props) {
   const saveTemplateGridRef = useRef(null);
   const templateVisibilityRef = useRef(null);
   const templateSelectorRef = useRef(null);
+  const [viewOptions, setViewOptions] = useState([]);
+  const [selectedView, setSelectedView] = useState(null);
+  const viewSelectorRef = useRef(null);
 
   // save template form
   const [saveTemplateGridCols, setSaveTemplateGridCols] = useState([]);
@@ -377,11 +381,46 @@ function ChildGridView(props) {
     }
   }
 
+  // run once when mounted
+  // set the view options
   useEffect(() => {
-    /*  when no column defs exist
+    const getViewOptions = async () => {
+      // set view options
+      const objPrefResult = await gf.getObjectPreferences(userInfo);
+
+      if (objPrefResult.status === "error") {
+        throw new Error("Error retrieving user object preferences");
+      }
+
+      if (objPrefResult.records.length > 0) {
+        const userObjPrefRec = objPrefResult.records[0];
+
+        const prefArray = userObjPrefRec.preferences;
+
+        const objectViewOptions = prefArray.find(
+          (p) => p.object === childObject
+        );
+
+        let optionsList = ["Grid"];
+        if (objectViewOptions.ganttView === true) {
+          optionsList.push("Gantt");
+        }
+        if (objectViewOptions.timeSeriesView === true) {
+          optionsList.push("Time Series");
+        }
+
+        setViewOptions(optionsList);
+        setSelectedView(optionsList[0]);
+      }
+    };
+
+    getViewOptions();
+  }, []);
+
+  useEffect(() => {
+    /*  
       1 - load the template options
       2 - set selected template based on preferences or defaults
-      3 - create the grid columns
   */
 
     const configureGrid = async () => {
@@ -515,40 +554,6 @@ function ChildGridView(props) {
           return;
         }
 
-        if (currentTemplate) {
-          const result = await gf.getTemplateFields(currentTemplate);
-
-          if (result.status === "error") {
-            throw new Error("Error retrieving temmplate fields");
-          }
-
-          // create the grid columns
-          gridCols = await gf.createGridColumns(
-            childObject,
-            result.records,
-            objectMetadata,
-            gridRef
-          );
-
-          setColDefs(gridCols);
-          prevColDefs.current = gridCols;
-        }
-
-        // get the data
-        const whereClause = `${masterObject.id}Id = '${selectedGridRow.Id}'`;
-
-        const response = await gf.runQuery(childObject, whereClause);
-
-        if (response.status === "error") {
-          throw new Error(
-            `Error retrieving related records for ${childObject}`
-          );
-        }
-
-        const data = response.records[0];
-        setRowData(data);
-        prevRowData.current = data;
-
         setLoadingIndicator(false);
       } catch (error) {
         setLoadingIndicator(false);
@@ -584,6 +589,41 @@ function ChildGridView(props) {
   ]);
 
   useEffect(() => {
+    /*  when the selected template changes
+      1 - create the grid columns
+    */
+
+    const createGridColumns = async () => {
+      if (_.isEqual(selectedTemplate, prevSelectedTemplate)) {
+        return;
+      }
+
+      setPrevSelectedTemplate({ ...selectedTemplate });
+
+      if (selectedTemplate) {
+        const result = await gf.getTemplateFields(selectedTemplate);
+
+        if (result.status === "error") {
+          throw new Error("Error retrieving temmplate fields");
+        }
+
+        // create the grid columns
+        let gridCols = await gf.createGridColumns(
+          childObject,
+          result.records,
+          objectMetadata,
+          gridRef
+        );
+
+        setColDefs(gridCols);
+        prevColDefs.current = gridCols;
+      }
+    };
+
+    createGridColumns();
+  }, [selectedTemplate]);
+
+  useEffect(() => {
     // get the data when the selected row changes
 
     const getData = async () => {
@@ -617,6 +657,33 @@ function ChildGridView(props) {
     dispatch,
     masterObject.id,
   ]);
+
+  useEffect(() => {
+    /*
+        1 - create the child view based on user input
+    */
+
+    const createView = async () => {
+      if (!selectedView) {
+        return;
+      }
+
+      switch (selectedView) {
+        case "Grid": {
+          // TBD
+          break;
+        }
+        case "Gantt": {
+          // TBD
+          break;
+        }
+        case "Time Series": {
+          // TBD
+          break;
+        }
+      }
+    };
+  }, [selectedView]);
 
   const autoGroupColumnDef = useMemo(() => {
     return {
@@ -777,6 +844,22 @@ function ChildGridView(props) {
             setSelectedTemplate(newValue);
           }}
           sx={{ ml: 5, width: 350 }}
+        />
+
+        <Autocomplete
+          id='childGridiewSelector'
+          autoComplete
+          includeInputInList
+          options={viewOptions}
+          ref={viewSelectorRef}
+          renderInput={(params) => (
+            <TextField {...params} label='View Type' variant='standard' />
+          )}
+          value={selectedView}
+          onChange={(event, newValue) => {
+            setSelectedView(newValue);
+          }}
+          sx={{ ml: 5, mt: -2, width: 150 }}
         />
       </Toolbar>
 

@@ -1423,6 +1423,66 @@ export async function getRelationshipPreferences(userInfo) {
   }
 }
 
+export async function getObjectPreferences(userInfo) {
+  try {
+    const preferencesUrl = "/postgres/knexSelect";
+
+    // get all columns
+    let columns = null;
+
+    // get the preferences from the database
+    const values = {
+      username: userInfo.userEmail,
+    };
+
+    const prefPayload = {
+      table: "user_object_prefs",
+      columns: columns,
+      values: values,
+      rowIds: [],
+      idField: null,
+    };
+
+    const prefResponse = await fetch(preferencesUrl, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(prefPayload),
+    });
+
+    if (!prefResponse.ok) {
+      throw new Error(`Network error - Error getting user object preferences`);
+    }
+
+    const prefResult = await prefResponse.json();
+
+    if (prefResult.status !== "ok") {
+      throw new Error("Error getting user object preferences");
+    }
+
+    let objectPrefs = [];
+
+    if (prefResult.records.length === 0) {
+      objectPrefs = [];
+    } else {
+      objectPrefs = prefResult.records; // array
+    }
+
+    return {
+      status: "ok",
+      errorMessage: null,
+      records: objectPrefs,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      errorMessage: error.message,
+      records: [],
+    };
+  }
+}
+
 // load query selector options
 export async function getQueryOptions(selectedObject, userInfo) {
   const url = "/postgres/knexSelect";

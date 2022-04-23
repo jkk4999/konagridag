@@ -39,6 +39,7 @@ import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
+import ObjectPreferencesPanel from "../../components/objectPreferencesPanel/objectPreferencesPanel";
 
 // Mui
 import { makeStyles } from "@mui/styles";
@@ -125,9 +126,11 @@ export default function GridView() {
   const gridRef = useRef(null);
   const saveTemplateGridRef = useRef(null);
   const objectSelectorRef = useRef(null);
+  const querySelectorRef = useRef(null);
   const templateVisibilityRef = useRef(null);
   const templateSelectorRef = useRef(null);
-  const querySelectorRef = useRef(null);
+  const viewSelectorRef = useRef(null);
+
   const jsonButton = useRef(null);
   const saveTemplateTextField = useRef(null);
   const saveQueryTextField = useRef(null);
@@ -140,6 +143,7 @@ export default function GridView() {
   const dispatch = useDispatch();
   const loadingIndicator = useSelector((state) => state.loadingIndicator);
   const objectMetadata = useSelector((state) => state.objectMetadata);
+  const objectPreferences = useSelector((state) => state.objectPreferences);
   const queryPanelVisible = useSelector((state) => state.queryPanelVisible);
   const queryRule = useSelector((state) => state.queryRule);
   const relationPreferences = useSelector((state) => state.relationPreferences);
@@ -160,10 +164,13 @@ export default function GridView() {
   const [columnDefs, setColumnDefs] = useState([]);
 
   const [objectOptions, setObjectOptions] = useState([]);
-  const [templateOptions, setTemplateOptions] = useState([]);
   const [queryOptions, setQueryOptions] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateOptions, setTemplateOptions] = useState([]);
+  const [viewOptions, setViewOptions] = useState([]);
+
   const [selectedQuery, setSelectedQuery] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedView, setSelectedView] = useState(null);
 
   // QueryBuilder local state
   const prevQueryColumns = useRef(null);
@@ -249,6 +256,9 @@ export default function GridView() {
       // set the selectedObject
       dispatch(setSelectedObject(selectedObj));
 
+      // set org objects
+      dispatch(setObjectOptions(data));
+
       setLoadingIndicator(false);
     };
 
@@ -263,6 +273,7 @@ export default function GridView() {
       5 - set selected template & query based on preferences or defaults
       6 - get the relationship preferences
       7 - create the subviews based on user relationship preferences
+      8 - set the view options based on the user object preference
   */
   useEffect(() => {
     const objChanged = async () => {
@@ -563,6 +574,34 @@ export default function GridView() {
           });
 
           dispatch(setRelationPreferences(result.records[0].preferences));
+        }
+
+        // set view options
+        const objPrefResult = await gf.getObjectPreferences(userInfo);
+
+        if (objPrefResult.status === "error") {
+          throw new Error("Error retrieving user object preferences");
+        }
+
+        if (objPrefResult.records.length > 0) {
+          const userObjPrefRec = objPrefResult.records[0];
+
+          const prefArray = userObjPrefRec.preferences;
+
+          const objectViewOptions = prefArray.find(
+            (p) => p.object === selectedObject.id
+          );
+
+          let optionsList = ["Grid"];
+          if (objectViewOptions.ganttView === true) {
+            optionsList.push("Gantt");
+          }
+          if (objectViewOptions.timeSeriesView === true) {
+            optionsList.push("Time Series");
+          }
+
+          setViewOptions(optionsList);
+          setSelectedView(optionsList[0]);
         }
 
         setLoadingIndicator(false);
@@ -1098,6 +1137,33 @@ export default function GridView() {
     selectedQuery,
     userInfo,
   ]);
+
+  useEffect(() => {
+    /*
+        1 - create the child view based on user input
+    */
+
+    const createView = async () => {
+      if (!selectedView) {
+        return;
+      }
+
+      switch (selectedView) {
+        case "Grid": {
+          // TBD
+          break;
+        }
+        case "Gantt": {
+          // TBD
+          break;
+        }
+        case "Time Series": {
+          // TBD
+          break;
+        }
+      }
+    };
+  }, [selectedView]);
 
   const classes = useStyles();
 
@@ -2174,11 +2240,22 @@ export default function GridView() {
           toolPanel: "agColumnsToolPanel",
         },
         {
+          id: "objectPreferences",
+          labelDefault: "Objects",
+          labelKey: "objects",
+          iconKey: "custom-stats",
+          width: 580,
+          toolPanel: ObjectPreferencesPanel,
+          toolPanelParams: {
+            orgObjects: objectOptions,
+          },
+        },
+        {
           id: "gridRelationships",
           labelDefault: "Relationships",
           labelKey: "relationships",
           iconKey: "custom-stats",
-          width: 550,
+          width: 340,
           toolPanel: GridRelationshipsPanel,
           toolPanelParams: {
             selectedObject: selectedObject,
@@ -2501,6 +2578,22 @@ export default function GridView() {
               <DoubleArrowOutlinedIcon />
             </IconButton>
           </Tooltip>
+
+          <Autocomplete
+            id='viewSelector'
+            autoComplete
+            includeInputInList
+            options={viewOptions}
+            ref={viewSelectorRef}
+            renderInput={(params) => (
+              <TextField {...params} label='View Type' variant='standard' />
+            )}
+            value={selectedView}
+            onChange={(event, newValue) => {
+              setSelectedView(newValue);
+            }}
+            sx={{ ml: 5, mt: -2, width: 150 }}
+          />
         </Toolbar>
 
         {/* query builder and query panel */}
