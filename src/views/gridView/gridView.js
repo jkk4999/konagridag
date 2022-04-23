@@ -97,6 +97,7 @@ import {
 import { RadioButtonComponent } from "@syncfusion/ej2-react-buttons";
 
 import * as gf from "./gridFunctions";
+import { setGridData } from "../../features/gridDataSlice";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -151,6 +152,7 @@ export default function GridView() {
   const userInfo = useSelector((state) => state.userInfo);
 
   // grid view local state
+  const prevColumnDefs = useRef(null);
   const prevObjectOptions = useRef(null);
   const prevQueryOptions = useRef(null);
   const prevSelectedGridRow = useRef(null);
@@ -257,7 +259,7 @@ export default function GridView() {
       dispatch(setSelectedObject(selectedObj));
 
       // set org objects
-      dispatch(setObjectOptions(data));
+      setObjectOptions(data);
 
       setLoadingIndicator(false);
     };
@@ -343,6 +345,21 @@ export default function GridView() {
 
         const templateData = templateResult.records;
 
+        if (templateData.length === 0) {
+          // no templates defined for this object
+
+          // create default grid columns
+          let defaultGridCols = await gf.createDefaultGridColumns(
+            selectedObject.id,
+            objectMetadata
+          );
+
+          setColumnDefs(defaultGridCols);
+          prevColumnDefs.current = defaultGridCols;
+
+          setSelectedTemplate(null);
+        }
+
         // create the template options list
         const tmpOptions = [];
         templateData.forEach((d) => {
@@ -367,6 +384,15 @@ export default function GridView() {
         }
 
         const queryData = queryResult.records;
+
+        if (queryData.length === 0) {
+          // no queries defined for this object
+
+          // clear the existing grid records
+          setGridData([]);
+
+          setSelectedQuery(null);
+        }
 
         // create the query options list
         const qryOptions = [];
@@ -461,7 +487,7 @@ export default function GridView() {
           setSelectedTemplate(templateOption);
         }
 
-        if (defaultTemplates.length === 0) {
+        if (templateData.length > 0 && defaultTemplates.length === 0) {
           // pick the first option
           // use this template
           setSelectedTemplate(tmpOptions[0]);
@@ -2226,8 +2252,6 @@ export default function GridView() {
     dispatch(setQueryRule(args.rule));
   }
 
-  console.log("Rendering View");
-
   // configures tool panels
   const sideBar = useMemo(() => {
     return {
@@ -2278,6 +2302,8 @@ export default function GridView() {
   const onRowGroupOpened = (params) => {
     // selectedGridRow.current = params.data;
   };
+
+  console.log("Rendering Grid View");
 
   return (
     <LoadingOverlay
@@ -2351,7 +2377,7 @@ export default function GridView() {
               if (objMetadata === undefined) {
                 // get object metadata
                 const metadataResult = await gf.getObjectMetadata(
-                  selectedObject.id,
+                  newValue.id,
                   userInfo,
                   objectMetadata
                 );
@@ -2364,7 +2390,7 @@ export default function GridView() {
 
                 // store object metadata in global state
                 objMetadata = {
-                  objName: selectedObject.id,
+                  objName: newValue.id,
                   metadata: metadataResult.records,
                 };
 
@@ -2381,7 +2407,7 @@ export default function GridView() {
                 );
               }
 
-              dispatch(setQueryColumns(qbColumns));
+              setQueryColumns(qbColumns);
 
               // store selected object in global state
               dispatch(setSelectedObject(newValue));

@@ -632,7 +632,14 @@ function ChildGridView(props) {
       }
 
       // get the data
-      const whereClause = `${masterObject.id}Id = '${selectedGridRow.Id}'`;
+      let whereClause = null;
+
+      const masterObj = masterObject.id;
+      if (masterObj.slice(-3) === "__c") {
+        whereClause = `${masterObj} = '${selectedGridRow.Id}'`;
+      } else {
+        whereClause = `${masterObject}Id = '${selectedGridRow.Id}'`;
+      }
 
       const response = await gf.runQuery(childObject, whereClause);
 

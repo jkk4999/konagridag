@@ -223,7 +223,7 @@ module.exports = async function (fastify, options, next) {
       // custom relation
       if (fieldName.slice(-3) === "__c") {
         relation = fieldName.slice(0, -1);
-        relation.push("r");
+        relation = relation + "r";
       }
 
       const relatedObjMetadataFields = relatedObjMetadata.fields;
