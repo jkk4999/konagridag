@@ -638,7 +638,7 @@ function ChildGridView(props) {
       if (masterObj.slice(-3) === "__c") {
         whereClause = `${masterObj} = '${selectedGridRow.Id}'`;
       } else {
-        whereClause = `${masterObject}Id = '${selectedGridRow.Id}'`;
+        whereClause = `${masterObj}Id = '${selectedGridRow.Id}'`;
       }
 
       const response = await gf.runQuery(childObject, whereClause);
