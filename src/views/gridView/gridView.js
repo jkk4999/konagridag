@@ -2431,7 +2431,7 @@ export default function GridView() {
               setSelectedTemplate(newValue);
               return;
             }}
-            sx={{ ml: 5, width: 250 }}
+            sx={{ ml: 5, width: 225 }}
           />
 
           <Autocomplete
@@ -2448,7 +2448,23 @@ export default function GridView() {
               setSelectedQuery(newValue);
               return;
             }}
-            sx={{ ml: 5, width: 250 }}
+            sx={{ ml: 5, width: 225 }}
+          />
+
+          <Autocomplete
+            id='viewSelector'
+            autoComplete
+            includeInputInList
+            options={viewOptions}
+            ref={viewSelectorRef}
+            renderInput={(params) => (
+              <TextField {...params} label='View Type' variant='standard' />
+            )}
+            value={selectedView}
+            onChange={(event, newValue) => {
+              setSelectedView(newValue);
+            }}
+            sx={{ ml: 5, width: 150 }}
           />
         </Toolbar>
 
@@ -2604,22 +2620,6 @@ export default function GridView() {
               <DoubleArrowOutlinedIcon />
             </IconButton>
           </Tooltip>
-
-          <Autocomplete
-            id='viewSelector'
-            autoComplete
-            includeInputInList
-            options={viewOptions}
-            ref={viewSelectorRef}
-            renderInput={(params) => (
-              <TextField {...params} label='View Type' variant='standard' />
-            )}
-            value={selectedView}
-            onChange={(event, newValue) => {
-              setSelectedView(newValue);
-            }}
-            sx={{ ml: 5, mt: -2, width: 150 }}
-          />
         </Toolbar>
 
         {/* query builder and query panel */}
