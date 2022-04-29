@@ -40,6 +40,7 @@ import "ag-grid-community/dist/styles/ag-theme-material.css";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
 import ObjectPreferencesPanel from "../../components/objectPreferencesPanel/objectPreferencesPanel";
+import AgGridAutocomplete from "../../components/aggridAutoComplete";
 
 // Mui
 import { makeStyles } from "@mui/styles";
@@ -53,6 +54,7 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
+
 import { FormControlLabel } from "@mui/material";
 import { Stack } from "@mui/material";
 import TextField from "@mui/material/TextField";
@@ -81,8 +83,10 @@ import DoubleArrowOutlinedIcon from "@mui/icons-material/DoubleArrowOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
+import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import SaveTemplateIcon from "@mui/icons-material/ViewColumn";
+import SaveIcon from "@mui/icons-material/CheckOutlined";
 
 // Syncfusion
 import {
@@ -113,7 +117,21 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+const getRowId = (params) => {
+  return params.data.Id;
+};
+
+let showErrors = false;
+// change row tracking state
+let changedRowTracking = [];
+let newRowTracking = [];
+
 export default function GridView() {
+  // custom Autocomplete cell editor
+  const [components] = useState({
+    agGridAutoComplete: AgGridAutocomplete,
+  });
+
   // Snackbar
   const { enqueueSnackbar } = useSnackbar();
 
@@ -164,6 +182,8 @@ export default function GridView() {
   // AgGrid local state
   const [rowData, setRowData] = useState([]);
   const [columnDefs, setColumnDefs] = useState([]);
+  const gridApi = useRef(null);
+  const columnApi = useRef(null);
 
   const [objectOptions, setObjectOptions] = useState([]);
   const [queryOptions, setQueryOptions] = useState([]);
@@ -1094,8 +1114,6 @@ export default function GridView() {
         // load the rule into the QueryBuilder
         queryBuilderRef.current.setRules(rule);
 
-        // execute the query
-        // const executeQueryResult = await runQuery();
         // get object metadata
         const metadataResult = await gf.getObjectMetadata(
           selectedObject.id,
@@ -1590,6 +1608,8 @@ export default function GridView() {
     }
 
     try {
+      setLoadingIndicator(true);
+
       // executes query based on queryBuilder rule
       const query = queryBuilderRef.current.getRules();
       const ruleStr = queryBuilderRef.current.getSqlFromRules(query);
@@ -1632,8 +1652,12 @@ export default function GridView() {
 
       // update grid row state
       setRowData(queryData);
+
+      setLoadingIndicator(false);
     } catch (error) {
       console.log(error.message);
+
+      setLoadingIndicator(false);
 
       // notify user
       const snackOptions = {
@@ -1712,6 +1736,10 @@ export default function GridView() {
       gridColumns.forEach((g) => {
         // get column def
         const def = gridRef.current.columnApi.getColumn(g.colId);
+        if (def.colDef.field === "error") {
+          return;
+        }
+
         if (
           def.colDef.field &&
           (def.visible || def.colDef.rowGroup || def.rowGroupActive)
@@ -1999,12 +2027,192 @@ export default function GridView() {
 
   // GRID EVENT HANDLERS
 
+  const doesExternalFilterPass = useCallback(
+    (node) => {
+      return node.data.error;
+    },
+    [showErrors]
+  );
+
+  const isExternalFilterPresent = useCallback(() => {
+    return showErrors;
+  }, []);
+
+  const externalFilterChanged = useCallback((newValue) => {
+    showErrors = newValue;
+    gridRef.current.api.onFilterChanged();
+  }, []);
+
   function gridCellValueChanged(params) {
     const rowIndex = params.rowIndex;
     const columnName = params.column;
     const columnDef = params.columnDef;
     const oldValue = params.oldValue;
     const newValue = params.newValue;
+
+    if (params.oldValue !== params.newValue) {
+      var column = params.column.colDef.field;
+      params.column.colDef.cellStyle = { backgroundColor: "#90EE90" };
+
+      params.api.refreshCells({
+        force: true,
+        columns: [params.column.getId()],
+        rowNodes: [params.node],
+      });
+
+      const rowId = params.node.data.Id;
+
+      if (!changedRowTracking.includes(rowId)) {
+        changedRowTracking.push(rowId);
+      }
+    }
+  }
+
+  async function saveGridData() {
+    var api = gridRef.current.api;
+
+    let changedRows = [];
+
+    changedRowTracking.forEach((r) => {
+      const node = api.getRowNode(r);
+      changedRows.push(node.data);
+    });
+
+    let objMetadata = objectMetadata.find(
+      (f) => f.objName === selectedObject.id
+    );
+    const metadataFields = objMetadata.metadata.fields;
+
+    // store updateable fields in a map
+    let fieldUpdateableMap = new Map();
+
+    metadataFields.forEach((field) => {
+      if (field.updateable || field.name === "Id") {
+        fieldUpdateableMap.set(field.name, field.updateable);
+      }
+    });
+
+    // delete error field and relationship properties from grid records
+    changedRows.forEach((rec) => {
+      for (const [key, value] of Object.entries(rec)) {
+        // map won't contain read-only or relationship fields
+        if (fieldUpdateableMap.get(key) === undefined) {
+          delete rec[key];
+        }
+      }
+    });
+
+    // force error to test error filtering
+    // changedRows[0].NumberOfEmployees = "/";
+
+    try {
+      // do the update
+      const url = "/salesforce/sobjectUpdate";
+
+      const payload = {
+        sobject: selectedObject.id,
+        records: changedRows,
+      };
+
+      const response = await fetch(url, {
+        method: "post",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Network error encountered updating ${selectedObject.id} records`
+        );
+      }
+
+      const result = await response.json();
+
+      // inspect each record to see if it saved
+      // add error message to record if operation failed
+      let hasErrors = false;
+      result.forEach((r) => {
+        const node = gridRef.current.api.getRowNode(r.id);
+        const rec = node.data;
+
+        if (r.status !== "ok") {
+          rec["error"] = r.status;
+
+          //  update grid row with error message
+          node.setData(rec);
+          hasErrors = true;
+        } else {
+          api.refreshCells({
+            force: true,
+            suppressFlash: true,
+            rowNodes: [node],
+          });
+          // remove row from change tracking
+          let newArray = changedRowTracking.filter((el) => el !== r.id);
+          changedRowTracking = [...newArray];
+        }
+      });
+
+      // TBD - ADD NEW RECORD PROCESSING
+      let newRows = [];
+
+      newRowTracking.forEach((r) => {
+        const node = api.getRowNode(r);
+        newRows.push(node.data);
+      });
+
+      if (!hasErrors) {
+        // turn off error filtering
+        showErrors = false;
+
+        // requery the data, because triggers could have fired
+        runQuery();
+
+        // notify user
+        const snackOptions = {
+          variant: "success",
+          autoHideDuration: 3000,
+          anchorOrigin: {
+            vertical: "top",
+            horizontal: "right",
+          },
+          TransitionComponent: Slide,
+        };
+
+        enqueueSnackbar("Records saved", snackOptions);
+      } else {
+        // display rows with errors (by setting filter)
+        externalFilterChanged(true);
+
+        // notify user
+        const snackOptions = {
+          variant: "error",
+          autoHideDuration: 3000,
+          anchorOrigin: {
+            vertical: "top",
+            horizontal: "right",
+          },
+          TransitionComponent: Slide,
+        };
+
+        enqueueSnackbar("Error saving records", snackOptions);
+      }
+    } catch (error) {
+      // notify user
+      const snackOptions = {
+        variant: "error",
+        autoHideDuration: 5000,
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+        TransitionComponent: Slide,
+      };
+
+      enqueueSnackbar(error.message, snackOptions);
+    }
   }
 
   function gridRowClicked(params) {
@@ -2038,15 +2246,6 @@ export default function GridView() {
   function gridSelectionChanged(params) {
     const api = params.api;
     const columnApi = params.columnApi;
-
-    return;
-
-    const id = params.data.id;
-
-    const rowNode = api.getRowNode(id);
-
-    // resends row data to subview
-    rowNode.setRowData(params.data);
   }
 
   function expandOrCollapseAll(params) {
@@ -2061,7 +2260,6 @@ export default function GridView() {
       enableRowGroup: true, // allow every column to be grouped
       enablePivot: true, // allow every column to be pivoted
       filter: "agMultiColumnFilter",
-      minWidth: 100,
       resizable: true,
       sortable: true,
       // filterParams: {
@@ -2100,14 +2298,16 @@ export default function GridView() {
     const allColumnIds = [];
     const skipHeader = false;
     gridRef.current.columnApi.getAllColumns().forEach((column) => {
-      allColumnIds.push(column.getId());
+      if (column.colDef.field !== "error") {
+        allColumnIds.push(column.getId());
+      }
     });
     gridRef.current.columnApi.autoSizeColumns(allColumnIds, skipHeader);
   }
 
   function onGridReady(e) {
-    // autoSizeAll(false);
-    // e.columnApi.resetColumnState();
+    // gridApi.current = e.api;
+    // columnApi.current = e.columnApi;
   }
 
   const autoSizeAll = useCallback((skipHeader) => {
@@ -2267,7 +2467,7 @@ export default function GridView() {
           id: "objectPreferences",
           labelDefault: "Objects",
           labelKey: "objects",
-          iconKey: "custom-stats",
+          iconKey: "menuPin",
           width: 580,
           toolPanel: ObjectPreferencesPanel,
           toolPanelParams: {
@@ -2278,7 +2478,7 @@ export default function GridView() {
           id: "gridRelationships",
           labelDefault: "Relationships",
           labelKey: "relationships",
-          iconKey: "custom-stats",
+          iconKey: "linked",
           width: 340,
           toolPanel: GridRelationshipsPanel,
           toolPanelParams: {
@@ -2296,14 +2496,37 @@ export default function GridView() {
     relationPreferences: relationPreferences,
   };
 
-  // use application id as the grid row id
-  const getRowId = useCallback((params) => params.data.id, []);
-
   const onRowGroupOpened = (params) => {
     // selectedGridRow.current = params.data;
   };
 
   console.log("Rendering Grid View");
+
+  const gridOptions = {
+    animateRows: true,
+    autoGroupColumnDef: autoGroupColumnDef,
+    columnDefs: columnDefs,
+    defaultColDef: defaultColDef,
+    detailCellRenderer: DetailCellRenderer,
+    detailCellRendererParams: detailCellRendererParams,
+    detailRowHeight: 500,
+    groupDisplayType: "singleColumn",
+    masterDetail: true,
+    onFirstDataRendered: onFirstDataRendered,
+    onGridReady: onGridReady,
+    onCellValueChanged: gridCellValueChanged,
+    onRowDataChanged: gridRowDataChanged,
+    onRowClicked: gridRowClicked,
+    onRowGroupOpened: onRowGroupOpened,
+    onRowSelected: gridRowSelected,
+    onSelectionChanged: gridSelectionChanged,
+    rowBuffer: 100,
+    rowGroupPanelShow: "always",
+    rowSelection: "multiple",
+    showOpenedGroup: true,
+    sideBar: sideBar,
+    suppressColumnVirtualisation: true,
+  };
 
   return (
     <LoadingOverlay
@@ -2495,7 +2718,7 @@ export default function GridView() {
           </Tooltip>
 
           {/* edit button */}
-          <Tooltip title='Edit' placement='top'>
+          <Tooltip title='Save' placement='top'>
             <IconButton
               sx={{
                 color: "#354868",
@@ -2503,11 +2726,13 @@ export default function GridView() {
                   color: "whitesmoke",
                 },
               }}
-              aria-label='Edit'
+              aria-label='Save'
               size='medium'
-              onClick={() => {}}
+              onClick={() => {
+                saveGridData();
+              }}
             >
-              <EditOutlinedIcon />
+              <SaveIcon />
             </IconButton>
           </Tooltip>
 
@@ -2604,8 +2829,8 @@ export default function GridView() {
             </IconButton>
           </Tooltip>
 
-          {/* relationships button */}
-          <Tooltip title='Relationships' placement='top'>
+          {/* refresh button */}
+          <Tooltip title='Refresh' placement='top'>
             <IconButton
               sx={{
                 color: "#354868",
@@ -2617,9 +2842,20 @@ export default function GridView() {
               size='medium'
               onClick={() => {}}
             >
-              <DoubleArrowOutlinedIcon />
+              <ReplayOutlinedIcon />
             </IconButton>
           </Tooltip>
+
+          {/* error status */}
+          <Box
+            sx={{
+              ml: 5,
+              color: "primary.error",
+              display: showErrors ? "block" : "none",
+            }}
+          >
+            Showing Save Errors
+          </Box>
         </Toolbar>
 
         {/* query builder and query panel */}
@@ -3199,15 +3435,17 @@ export default function GridView() {
             <AgGridReact
               animateRows={true}
               autoGroupColumnDef={autoGroupColumnDef}
+              columnDefs={columnDefs}
+              columnTypes={columnTypes}
+              components={components}
               defaultColDef={defaultColDef}
               detailCellRenderer={DetailCellRenderer}
               detailCellRendererParams={detailCellRendererParams}
               detailRowHeight={500}
-              columnDefs={columnDefs}
-              columnTypes={columnTypes}
-              enableColResize='true'
+              doesExternalFilterPass={doesExternalFilterPass}
               getRowId={getRowId}
               groupDisplayType={"singleColumn"}
+              isExternalFilterPresent={isExternalFilterPresent}
               masterDetail={true}
               onFirstDataRendered={onFirstDataRendered}
               onGridReady={onGridReady}
@@ -3218,10 +3456,11 @@ export default function GridView() {
               onRowSelected={gridRowSelected}
               onSelectionChanged={gridSelectionChanged}
               ref={gridRef}
-              rowData={rowData}
               rowBuffer={100}
+              rowData={rowData}
               rowGroupPanelShow={"always"}
-              rowSelection='multiple'
+              rowModelType={"clientSide"}
+              rowSelection={"multiple"}
               showOpenedGroup={true}
               sideBar={sideBar}
               suppressColumnVirtualisation={true}

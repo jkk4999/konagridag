@@ -28,6 +28,17 @@ import { NumericTextBoxComponent } from "@syncfusion/ej2-react-inputs";
 // AgGrid cell renderers
 import TextRenderer from "../../components/aggrid/cellRenderers/selectText";
 
+// AgGrid cell editors
+// import { AutocompleteSelectCellEditor } from "ag-grid-autocomplete-editor";
+// import "ag-grid-autocomplete-editor/dist/main.css";
+import AgGridAutocomplete from "../../components/aggridAutoComplete";
+
+// MUI
+import Box from "@mui/material/Box";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import { IconButton } from "@mui/material";
+import Tooltip from "@mui/material/Tooltip";
+
 // Snackbar
 import { useSnackbar } from "notistack";
 import { Slide } from "@mui/material";
@@ -38,6 +49,13 @@ export function compareArrays(array1, array2) {
       return object1.id === object2.id;
     });
   });
+}
+
+function errorRenderer(params) {
+  const message = params;
+  const imageElement = document.createElement("img");
+  imageElement.src = ErrorOutlineIcon;
+  return imageElement;
 }
 
 export async function createDefaultGridColumns(selectedObject, objectMetadata) {
@@ -114,7 +132,7 @@ export async function createGridColumns(
   if (templateFields !== null && templateFields.length > 0) {
     const cols = [];
 
-    // sort template fielgs by column order
+    // sort template fields by column order
     templateFields.sort((a, b) => a.column_order - b.column_order);
 
     // create a column for all metadata fields
@@ -161,6 +179,11 @@ export async function createGridColumns(
 
     // hide columns not in template
     cols.forEach((c) => {
+      // skip error column
+      if (c.field === "error") {
+        return;
+      }
+
       const templateField = templateFields.find((f) => f.name === c.field);
 
       if (templateField) {
@@ -181,14 +204,55 @@ export async function createGridColumns(
       colOrder.push(gridCol);
     });
 
+    // add a error column in the first position
+    // we will use a cell renderer to show a red dot when save errors occur
+    // column is hidden by default, and shown when we need to display errors
+    const errorCol = {
+      field: "error",
+      headerName: "",
+      hide: false,
+      width: 40,
+      cellRenderer: (params) => {
+        // put the value in bold
+        // return 'Value is **' + params.value + '**';
+
+        // const imageElement = document.createElement("img");
+        // imageElement.src = ErrorOutlineIcon;
+        // return imageElement;
+        if (params.value) {
+          return (
+            <Box
+              sx={{
+                alignItems: "left",
+                justifyContent: "left",
+                ml: -2,
+              }}
+            >
+              <Tooltip title={params.value}>
+                <IconButton size='small' color='error'>
+                  <ErrorOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          );
+        } else {
+          return <div />;
+        }
+      },
+    };
+    colOrder.unshift(errorCol);
+
     // set the first column to use agGroupCellRenderer (to show subview)
-    const firstCol = colOrder[0];
+    const firstCol = colOrder[1];
     firstCol.cellRenderer = "agGroupCellRenderer";
 
     // apply sorting, grouping and aggregrations
     // hide group columns
     const columnSort = [];
     colOrder.forEach((c, index) => {
+      if (c.field === "error") {
+        return;
+      }
       // get template field definition
       const templateField = templateFields.find((t) => t.name === c.field);
 
@@ -233,112 +297,13 @@ export async function createGridColumns(
       }
     });
 
-    // add the group column aggregations
-
-    // gridRef.current.columnApi.applyColumnState({
-    //   state: columnSort,
-    //   defaultState: { sort: null },
-    // });
-
     return colOrder;
   }
 }
 
-export function createSaveTemplateRecords(
-  selectedObject,
-  gridColumns,
-  objectMetadata,
-  selectedTemplate
-) {
-  // create a grid row (template record) for each grid column
-
-  // get the object fields metadata
-  const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
-  const metadataFields = objMetadata.metadata.fields;
-
-  const templateRecs = [];
-  gridColumns.forEach((v, index) => {
-    // get datatype of field from metadata
-    const metadataField = metadataFields.find((f) => f.name === v.colDef.field);
-    const fieldDataType = metadataField.dataType;
-
-    const isGroup = v.colDef.rowGroup || v.rowGroupActive;
-
-    const newRec = {
-      name: v.colDef.field,
-      templateid: selectedTemplate === null ? null : selectedTemplate.id,
-      column_order: index,
-      datatype: fieldDataType,
-      sort: v.sort !== undefined ? v.sort : "",
-      filter: "",
-      aggregation: v.aggFunc !== undefined ? v.aggFunc : "",
-      split: v.pinned ? v.pinned : false,
-      formula: "",
-      group: isGroup,
-      group_field: "",
-    };
-
-    templateRecs.push(newRec);
-  });
-
-  return templateRecs;
-}
-
-export async function createTemplate(
-  templateName,
-  selectedObject,
-  templateVisibility,
-  userInfo
-) {
-  const insertUrl = "/postgres/knexInsert";
-
-  const values = {
-    template_name: templateName,
-    orgid: userInfo.organizationId,
-    owner: userInfo.userEmail,
-    is_active: true,
-    object: selectedObject,
-    is_public: templateVisibility,
-    is_related: false,
-    default: false,
-  };
-
-  const insertPayload = {
-    table: "template",
-    values: values,
-    key: "id",
-  };
-
-  const insertResponse = await fetch(insertUrl, {
-    method: "post",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(insertPayload),
-  });
-
-  if (!insertResponse.ok) {
-    throw new Error("Error creating template");
-  }
-
-  const insertResult = await insertResponse.json();
-
-  if (insertResult.status !== "ok") {
-    return {
-      status: "error",
-      errorMessage: insertResult.errorMessage,
-      records: [],
-    };
-  } else {
-    return {
-      status: "ok",
-      errorMessage: null,
-      records: insertResult.records,
-    };
-  }
-}
-
 export async function createGridField(metadataField, fieldMetadata) {
+  // const selectedObject = useSelector((state) => state.selectedObject);
+
   const sfdcDataType = metadataField.dataType;
   const fieldLabel = fieldMetadata.label;
 
@@ -375,33 +340,6 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     return "$" + formatted;
   };
-
-  // define a column type (you can define as many as you like)
-  // const columnTypes = {
-  //   dateColumn: {
-  //     // filter: "agMultiColumnFilter",
-  //     filterParams: {
-  //       // provide comparator function
-  //       comparator: (dateFromFilter, cellValue) => {
-  //         // In the example application, dates are stored as dd/mm/yyyy
-  //         // We create a Date object for comparison against the filter date
-  //         const dateParts = cellValue.split("/");
-  //         const day = Number(dateParts[0]);
-  //         const month = Number(dateParts[1]) - 1;
-  //         const year = Number(dateParts[2]);
-  //         const cellDate = new Date(year, month, day);
-  //         // Now that both parameters are Date objects, we can compare
-  //         if (cellDate < dateFromFilter) {
-  //           return -1;
-  //         } else if (cellDate > dateFromFilter) {
-  //           return 1;
-  //         } else {
-  //           return 0;
-  //         }
-  //       },
-  //     },
-  //   },
-  // };
 
   switch (sfdcDataType) {
     case "boolean": {
@@ -655,6 +593,11 @@ export async function createGridField(metadataField, fieldMetadata) {
       }
 
       return {
+        cellEditor: AgGridAutocomplete,
+        cellEditorPopup: true,
+        cellEditorParams: {
+          relation: relation,
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -665,6 +608,44 @@ export async function createGridField(metadataField, fieldMetadata) {
         },
         minWidth: 150,
         resizable: true,
+        // convert relation id to relation name
+        valueFormatter: function (params) {
+          const field = params.colDef.field;
+          const rec = params.data;
+
+          let relation = null;
+          if (field.slice(-2) === "Id") {
+            relation = field.slice(0, -2);
+          }
+
+          if (field.slice(-3) === "__c") {
+            relation = field.slice(0, -3);
+          }
+
+          if (rec.hasOwnProperty(relation)) {
+            if (field === "Case") {
+              return rec[relation].CaseNumber;
+            }
+
+            if (field === "Contract") {
+              return rec[relation].ContractNumber;
+            }
+
+            if (rec[relation].Name) {
+              return rec[relation].Name;
+            } else {
+              return params.value;
+            }
+          } else {
+            return params.value;
+          }
+        },
+        // convert value to code
+        valueParser: (params) => {
+          const rec = params.data;
+          const field = params.colDef.field;
+          return rec[field];
+        },
       };
     }
     case "string": {
@@ -706,6 +687,100 @@ export async function createGridField(metadataField, fieldMetadata) {
         textAlign: null,
       };
     }
+  }
+}
+
+export function createSaveTemplateRecords(
+  selectedObject,
+  gridColumns,
+  objectMetadata,
+  selectedTemplate
+) {
+  // create a grid row (template record) for each grid column
+
+  // get the object fields metadata
+  const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
+  const metadataFields = objMetadata.metadata.fields;
+
+  const templateRecs = [];
+  gridColumns.forEach((v, index) => {
+    // get datatype of field from metadata
+    const metadataField = metadataFields.find((f) => f.name === v.colDef.field);
+    const fieldDataType = metadataField.dataType;
+
+    const isGroup = v.colDef.rowGroup || v.rowGroupActive;
+
+    const newRec = {
+      name: v.colDef.field,
+      templateid: selectedTemplate === null ? null : selectedTemplate.id,
+      column_order: index,
+      datatype: fieldDataType,
+      sort: v.sort !== undefined ? v.sort : "",
+      filter: "",
+      aggregation: v.aggFunc !== undefined ? v.aggFunc : "",
+      split: v.pinned ? v.pinned : false,
+      formula: "",
+      group: isGroup,
+      group_field: "",
+    };
+
+    templateRecs.push(newRec);
+  });
+
+  return templateRecs;
+}
+
+export async function createTemplate(
+  templateName,
+  selectedObject,
+  templateVisibility,
+  userInfo
+) {
+  const insertUrl = "/postgres/knexInsert";
+
+  const values = {
+    template_name: templateName,
+    orgid: userInfo.organizationId,
+    owner: userInfo.userEmail,
+    is_active: true,
+    object: selectedObject,
+    is_public: templateVisibility,
+    is_related: false,
+    default: false,
+  };
+
+  const insertPayload = {
+    table: "template",
+    values: values,
+    key: "id",
+  };
+
+  const insertResponse = await fetch(insertUrl, {
+    method: "post",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(insertPayload),
+  });
+
+  if (!insertResponse.ok) {
+    throw new Error("Error creating template");
+  }
+
+  const insertResult = await insertResponse.json();
+
+  if (insertResult.status !== "ok") {
+    return {
+      status: "error",
+      errorMessage: insertResult.errorMessage,
+      records: [],
+    };
+  } else {
+    return {
+      status: "ok",
+      errorMessage: null,
+      records: insertResult.records,
+    };
   }
 }
 

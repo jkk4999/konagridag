@@ -105,6 +105,7 @@ function ChildGridView(props) {
   const [colDefs, setColDefs] = useState([]);
   const prevColDefs = useRef(null);
   const [templateOptions, setTemplateOptions] = useState(null);
+  const [changedRows, setChangedRows] = useState(null);
 
   // local object references
   const gridRef = useRef(null);
@@ -133,7 +134,9 @@ function ChildGridView(props) {
   );
 
   // use application id as the grid row id
-  const getRowId = useCallback((params) => params.data.id, []);
+  const getRowId = useCallback(function (params) {
+    return params.data.Id;
+  }, []);
 
   const defaultColDef = useMemo(() => {
     return {
@@ -181,6 +184,28 @@ function ChildGridView(props) {
       allColumnIds.push(column.getId());
     });
     gridRef.current.columnApi.autoSizeColumns(allColumnIds, skipHeader);
+  }
+
+  function gridCellValueChanged(params) {
+    const rowIndex = params.rowIndex;
+    const columnName = params.column;
+    const columnDef = params.columnDef;
+    const oldValue = params.oldValue;
+    const newValue = params.newValue;
+
+    // add row ID to row tracking state
+    let rows = [];
+    if (changedRows) {
+      changedRows.forEach((v) => {
+        rows.push(v);
+      });
+    }
+
+    const newRowSet = new Set([...rows, params.node.data.Id]);
+
+    setChangedRows(newRowSet);
+
+    console.log("1");
   }
 
   // TEMPLATE FUNCTIONS
@@ -881,6 +906,7 @@ function ChildGridView(props) {
             enableColResize='true'
             getRowId={getRowId}
             groupDisplayType={"singleColumn"}
+            onCellValueChanged={gridCellValueChanged}
             onFirstDataRendered={onFirstDataRendered}
             ref={gridRef}
             rowData={rowData}

@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-// global
+// AgGrid
+import { LicenseManager } from "ag-grid-enterprise";
 
+// global
 import { setUserInfo } from "../features/userInfoSlice";
 import { setSelectedApp } from "../features/selectedAppSlice";
 import { setSelectedAppTitle } from "../features/selectedAppTitleSlice";
@@ -43,6 +45,11 @@ import { store } from "../store/store";
 import { BiCalculator } from "react-icons/bi";
 
 export default function MainApp() {
+  // AgGrid license manager
+  LicenseManager.setLicenseKey(
+    "For_Trialing_ag-Grid_Only-Not_For_Real_Development_Or_Production_Projects-Valid_Until-25_June_2022_[v2]_MTY1NjExMTYwMDAwMA==724bd239840e6ba69c82dd138d123a59"
+  );
+
   const dispatch = useDispatch();
 
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();

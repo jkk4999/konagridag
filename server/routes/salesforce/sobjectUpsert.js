@@ -1,5 +1,5 @@
 module.exports = async function (fastify, options, next) {
-  fastify.post("/sobjectUpdate", async function (request, reply) {
+  fastify.post("/sobjectUpsert", async function (request, reply) {
     // try {
     var conn = fastify.conn;
 
@@ -10,29 +10,30 @@ module.exports = async function (fastify, options, next) {
     let response = null;
 
     try {
-      let response = await conn
-        .sobject(objName)
-        .update(records, { allowRecursive: true });
+      let response = await conn.sobject(objName).upsert(records, "Id");
 
       let result = [];
 
-      response.forEach((res, index) => {
+      response.forEach((res) => {
         let recResult = {};
-        recResult["id"] = res.id;
         if (res.success === false) {
+          recResult["id"] = res.id;
           const firstError = res.errors[0];
-          recResult.id = records[index].Id;
           recResult["status"] = firstError.message;
         } else {
           recResult["id"] = res.id;
-          recResult["status"] = "ok";
+          recResult["status"] = "success";
         }
         result.push(recResult);
       });
 
-      return result;
+      return {
+        status: "ok",
+        records: result,
+      };
     } catch (error) {
       return {
+        status: "error",
         errorMessage: error.message,
       };
     }
