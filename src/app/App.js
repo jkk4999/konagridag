@@ -9,7 +9,9 @@ import "ag-grid-enterprise/dist/styles/ag-grid.css";
 import "ag-grid-enterprise/dist/styles/ag-theme-alpine.css";
 
 // notifications
-import { SnackbarProvider } from "notistack";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+// import { SnackbarProvider } from "notistack";
 
 // components
 import MainApp from "../views/mainApp";
@@ -75,18 +77,17 @@ function App() {
     <ThemeProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
         <ReactQueryDevtools initialIsOpen={true} />
-        <SnackbarProvider>
-          <BrowserRouter>
-            <div>
-              <CssBaseline />
-              <AppBar />
-              <div className={classes.appMain}>
-                <Sidebar />
-                <MainApp />
-              </div>
+        <BrowserRouter>
+          <div>
+            <CssBaseline />
+            <AppBar />
+            <div className={classes.appMain}>
+              <ToastContainer />
+              <Sidebar />
+              <MainApp />
             </div>
-          </BrowserRouter>
-        </SnackbarProvider>
+          </div>
+        </BrowserRouter>
       </QueryClientProvider>
     </ThemeProvider>
   );

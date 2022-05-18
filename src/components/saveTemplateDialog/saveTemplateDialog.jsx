@@ -15,9 +15,8 @@ import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+/// Toast
+import { toast } from "react-toastify";
 
 // grid functions
 import * as gf from "../../views/gridView/gridFunctions";
@@ -67,9 +66,6 @@ function SaveTemplateDialog(props) {
   const userInfo = useSelector((state) => state.userInfo);
   const objectMetadata = useSelector((state) => state.objectMetadata);
 
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
-
   // enable the Public/Private checkbox for admins
   let disableCheckbox = true;
   if (userInfo.profileName === "System Administrator") {
@@ -100,17 +96,8 @@ function SaveTemplateDialog(props) {
 
       if (templateName === "") {
         // prompt user for template name
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
+        toast.warn("Please enter a template name", { autoClose: 5000 });
 
-        enqueueSnackbar("Please enter a template name", snackOptions);
         return;
       }
 
@@ -288,32 +275,12 @@ function SaveTemplateDialog(props) {
       }
 
       // notify user
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Template Saved", snackOptions);
+      toast.success("Template saved", { autoClose: 3000 });
     } catch (error) {
       console.log(error.message);
 
       // notify user
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar(error.message, snackOptions);
+      toast.error(error.message, { autoClose: 5000 });
     }
 
     props.setSaveTemplateFormOpen(false);

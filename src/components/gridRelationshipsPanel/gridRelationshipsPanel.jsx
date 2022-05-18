@@ -12,9 +12,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
 
 import * as gf from "../../views/gridView/gridFunctions";
 
@@ -24,8 +23,8 @@ import Box from "@mui/material/Box";
 import { Stack } from "@mui/material";
 
 export default function GridRelationshipsPanel(props) {
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
+  // used to update toast message
+  const toastId = useRef(null);
 
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
@@ -246,24 +245,14 @@ export default function GridRelationshipsPanel(props) {
         console.log(error.message);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar(error.message, snackOptions);
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
     getRelationships();
 
     // get the relationships
-  }, [selectedObject, enqueueSnackbar, userInfo]);
+  }, [selectedObject, userInfo]);
 
   return (
     <Stack style={{ textAlign: "center", height: "100%" }}>
@@ -333,17 +322,7 @@ export default function GridRelationshipsPanel(props) {
                   })
                   .catch((error) => {
                     // notify user of error
-                    const snackOptions = {
-                      variant: "error",
-                      autoHideDuration: 5000,
-                      anchorOrigin: {
-                        vertical: "top",
-                        horizontal: "right",
-                      },
-                      TransitionComponent: Slide,
-                    };
-
-                    enqueueSnackbar(error.message, snackOptions);
+                    toast.error(error.message, { autoClose: 5000 });
                   });
               }
             });
@@ -435,17 +414,7 @@ export default function GridRelationshipsPanel(props) {
               dispatch(setRelationPreferences(userPrefRec.preferences));
             } catch (error) {
               // notify user of error
-              const snackOptions = {
-                variant: "error",
-                autoHideDuration: 5000,
-                anchorOrigin: {
-                  vertical: "top",
-                  horizontal: "right",
-                },
-                TransitionComponent: Slide,
-              };
-
-              enqueueSnackbar(error.message, snackOptions);
+              toast.error(error.message, { autoClose: 5000 });
             }
           }}
           variant='contained'

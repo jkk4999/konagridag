@@ -18,9 +18,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
 
 import * as gf from "../../views/gridView/gridFunctions";
 
@@ -47,10 +46,8 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 export default (props) => {
-  // const orgObjects = props.orgObjects;
-
-  // Snackbar
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
+  // used to update toast message
+  const toastId = useRef(null);
 
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
@@ -252,17 +249,7 @@ export default (props) => {
         console.log(error.message);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        const key = enqueueSnackbar(error.message, snackOptions);
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
@@ -382,17 +369,7 @@ export default (props) => {
               dispatch(setToolbarState(newState));
             } catch (error) {
               // notify user of error
-              const snackOptions = {
-                variant: "error",
-                autoHideDuration: 5000,
-                anchorOrigin: {
-                  vertical: "top",
-                  horizontal: "right",
-                },
-                TransitionComponent: Slide,
-              };
-
-              enqueueSnackbar(error.message, snackOptions);
+              toast.error(error.message, { autoClose: 5000 });
             }
           }}
           variant='contained'

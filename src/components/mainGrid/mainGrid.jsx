@@ -45,9 +45,8 @@ import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
 
 import * as ghf from "../../components/gridHeader/gridHeaderFuncs";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
 
 // Lodash
 import _, { isEqual } from "lodash";
@@ -75,6 +74,9 @@ let newRowTracking = [];
 
 const MainGrid = React.forwardRef((props, ref) => {
   const { gridRef, queryBuilderRef, objectOptions } = props;
+
+  // used to update toast message
+  const toastId = useRef(null);
 
   console.log("Running main grid");
 
@@ -114,9 +116,6 @@ const MainGrid = React.forwardRef((props, ref) => {
   const prevColumnDefs = useRef(null);
   const prevSelectedTemplate = useRef(null);
   const prevSelectedQuery = useRef(null);
-
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
 
   const containerStyle = useMemo(() => ({ width: "95%", height: "90%" }), []);
   const gridStyle = useMemo(
@@ -174,18 +173,8 @@ const MainGrid = React.forwardRef((props, ref) => {
 
       setLoadingIndicator(false);
 
-      // notify user
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Error executing query", snackOptions);
+      // notify user of error
+      toast.error("Error executing query", { autoClose: 5000 });
     }
   }
 
@@ -335,28 +324,12 @@ const MainGrid = React.forwardRef((props, ref) => {
         console.log(`useEffectTemplateChanged() - ${error.message}`);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar(error.message, snackOptions);
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
     tmpChanged();
-  }, [
-    selectedObject,
-    selectedTemplate,
-    gridRef,
-    objectMetadata,
-    enqueueSnackbar,
-  ]);
+  }, [selectedObject, selectedTemplate, gridRef, objectMetadata]);
 
   // query changed
   useEffect(() => {

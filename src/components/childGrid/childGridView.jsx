@@ -39,9 +39,8 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Toolbar from "@mui/material/Toolbar";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
 
 // MUI icons
 import AddOutlinedIcon from "@mui/icons-material/Add";
@@ -70,6 +69,9 @@ const useStyles = makeStyles((theme) => ({
 
 function ChildGridView(props) {
   const { masterObject, childObject, selectedGridRow } = props;
+
+  // used to update toast message
+  const toastId = useRef(null);
 
   // only allow 1 expanded row
   // masterGridRef.api.forEachNode((node) => {
@@ -115,9 +117,6 @@ function ChildGridView(props) {
   const [saveTemplateGridData, setSaveTemplateGridData] = useState([]);
   const [saveTemplateFormOpen, setSaveTemplateFormOpen] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
-
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
 
   const containerStyle = useMemo(() => ({ width: "95%", height: "90%" }), []);
 
@@ -576,17 +575,7 @@ function ChildGridView(props) {
         console.log(error.message);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar(error.message, snackOptions);
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
@@ -598,7 +587,6 @@ function ChildGridView(props) {
     colDefs,
     objectMetadata,
     userInfo,
-    enqueueSnackbar,
   ]);
 
   // selectedTemplate changed

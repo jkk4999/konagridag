@@ -13,9 +13,9 @@ import { useQuery } from "react-query";
 // MUI
 import Box from "@mui/material/Box";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import { Routes, Route } from "react-router-dom";
 
@@ -38,83 +38,62 @@ export default function MainApp() {
 
   const dispatch = useDispatch();
 
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
+  const { isLoading, isError, error } = useQuery("loginData", async () => {
+    const email = "jeffreykennedy@dts.com";
+    const pw = "3944Pine!!KlvlaJ75DPUNrGggtMHOsBvrc";
+    const loginUrl = "http://login.salesforce.com";
 
-  const onClickDismiss = (key) => () => {
-    notistackRef.current.closeSnackbar(key);
-  };
+    const url = "/salesforce/jsforce";
 
-  const notistackRef = React.createRef();
+    const payload = {
+      userName: email,
+      userPassword: pw,
+      loginUrl: loginUrl,
+    };
 
-  const { isLoading, isError, error, data, isFetching } = useQuery(
-    "loginData",
-    async () => {
-      const email = "jeffreykennedy@dts.com";
-      const pw = "3944Pine!!KlvlaJ75DPUNrGggtMHOsBvrc";
-      const loginUrl = "http://login.salesforce.com";
+    const response = await fetch(url, {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const url = "/salesforce/jsforce";
-
-      const payload = {
-        userName: email,
-        userPassword: pw,
-        loginUrl: loginUrl,
-      };
-
-      const response = await fetch(url, {
-        method: "post",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error("Network error occured");
-      }
-
-      const result = await response.json();
-
-      if (result.status === "error") {
-        throw new Error(`Salesforce login error ${result.errorMessage}`);
-      }
-
-      // store user state
-      const user = result.data;
-
-      const userData = {
-        userId: email,
-        userName: user.userName,
-        userPassword: pw,
-        loginUrl: loginUrl,
-        userEmail: user.userEmail,
-        organizationId: user.organizationId,
-        profileId: user.profileId,
-        profileName: user.profileName,
-        locale: user.locale,
-        sessionId: user.sessionId,
-      };
-
-      console.log("Setting userInfo state");
-      console.log("Salesforce login successful");
-
-      // ToDo - display success toast message
-      dispatch(setUserInfo(userData));
-
-      // display login success toast message
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      const key = enqueueSnackbar("Salesforce login successful", snackOptions);
+    if (!response.ok) {
+      throw new Error("Network error occured");
     }
-  );
+
+    const result = await response.json();
+
+    if (result.status === "error") {
+      throw new Error(`Salesforce login error ${result.errorMessage}`);
+    }
+
+    // store user state
+    const user = result.data;
+
+    const userData = {
+      userId: email,
+      userName: user.userName,
+      userPassword: pw,
+      loginUrl: loginUrl,
+      userEmail: user.userEmail,
+      organizationId: user.organizationId,
+      profileId: user.profileId,
+      profileName: user.profileName,
+      locale: user.locale,
+      sessionId: user.sessionId,
+    };
+
+    console.log("Setting userInfo state");
+    console.log("Salesforce login successful");
+
+    // ToDo - display success toast message
+    dispatch(setUserInfo(userData));
+
+    // display login success toast message
+    toast.success("Salesforce login successful", { autoClose: 3000 });
+  });
 
   if (isLoading) {
     return <span>Loading...</span>;

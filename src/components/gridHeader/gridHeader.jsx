@@ -12,9 +12,8 @@ import PubSub from "pubsub-js";
 import LoadingOverlay from "react-loading-overlay-ts";
 import DotLoader from "react-spinners/DotLoader";
 
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
+// Toast
+import { toast } from "react-toastify";
 
 // functions
 import * as ghf from "./gridHeaderFuncs";
@@ -82,8 +81,8 @@ import { ConstructionOutlined } from "@mui/icons-material";
 let showErrors = false;
 
 function GridHeader() {
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
+  // Toast
+  const toastId = React.useRef(null);
 
   // local object references
   const objectSelectorRef = useRef(null);
@@ -259,18 +258,7 @@ function GridHeader() {
 
       dispatch(setLoadingIndicator(false));
 
-      // notify user
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Error executing query", snackOptions);
+      toast.error("Error executing query", { autoClose: 5000 });
     }
   };
 
@@ -561,21 +549,7 @@ function GridHeader() {
         throw new Error(`gridView-saveQuery() - ${insertResponse.message}`);
       }
 
-      // let insertResult = await insertResponse.json();
-      // const newQuery = insertResult.records[0];
-
-      // notify user
-      const snackOptions = {
-        variant: "success",
-        autoHideDuration: 3000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Query Saved", snackOptions);
+      toast.success("Query Saved", { autoClose: 3000 });
 
       // update query text
       let queryContent = null;
@@ -715,17 +689,7 @@ function GridHeader() {
         console.log(`gridView-userEffect() - ${result.errorMessage}`);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar("Error retrieving org objects", snackOptions);
+        toast.error("Error retrieving org objects", { autoClose: 5000 });
 
         return "error";
       }
@@ -810,7 +774,7 @@ function GridHeader() {
     };
 
     loadInitialData();
-  }, [toolbarState, objectOptions, dispatch, userInfo, enqueueSnackbar]);
+  }, [toolbarState, objectOptions, dispatch, userInfo]);
 
   // selectedObject changed
   useEffect(() => {
@@ -1014,20 +978,9 @@ function GridHeader() {
           // no queries defined for this object
 
           // notify user of error
-          const snackOptions = {
-            variant: "info",
-            autoHideDuration: 5000,
-            anchorOrigin: {
-              vertical: "top",
-              horizontal: "right",
-            },
-            TransitionComponent: Slide,
-          };
-
-          enqueueSnackbar(
-            `No queries defined for ${selectedObject.id}`,
-            snackOptions
-          );
+          toast.warn(`No queries defined for ${selectedObject.id}`, {
+            autoClose: 5000,
+          });
 
           newToolbarState.selectedQuery = null;
           newToolbarState.queryRule = [];
@@ -1211,17 +1164,7 @@ function GridHeader() {
         console.log(error.message);
 
         // notify user of error
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar(error.message, snackOptions);
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
@@ -1230,7 +1173,6 @@ function GridHeader() {
     toolbarState,
     selectedObject,
     objectOptions,
-    enqueueSnackbar,
     objectMetadata,
     dispatch,
     userInfo,
@@ -1292,25 +1234,14 @@ function GridHeader() {
         dispatch(setLoadingIndicator(false));
         console.log(error.message);
 
-        // notify user
-        const snackOptions = {
-          variant: "error",
-          autoHideDuration: 5000,
-          anchorOrigin: {
-            vertical: "top",
-            horizontal: "right",
-          },
-          TransitionComponent: Slide,
-        };
-
-        enqueueSnackbar(error.message, snackOptions);
+        // notify user of error
+        toast.error(error.message, { autoClose: 5000 });
       }
     };
 
     queryChanged();
   }, [
     dispatch,
-    enqueueSnackbar,
     objectMetadata,
     toolbarState,
     selectedObject,

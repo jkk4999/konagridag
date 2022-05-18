@@ -5,7 +5,6 @@ import { makeStyles } from "@mui/styles";
 import { useNavigate } from "react-router-dom";
 
 import { setSidebarSize } from "../features/sidebarSizeSlice";
-// import { setSelectedApp } from "../features/selectedAppSlice";
 import { setSelectedAppTitle } from "../features/selectedAppTitleSlice";
 
 import Box from "@mui/material/Box";
