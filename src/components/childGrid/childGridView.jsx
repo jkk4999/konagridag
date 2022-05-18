@@ -402,10 +402,6 @@ function ChildGridView(props) {
         return;
       }
 
-      if (selectedView === prevSelectedView.current) {
-        return;
-      }
-
       console.log(`${childObject} grid - loading view options`);
 
       // get relation preferences for the selected object
@@ -448,7 +444,7 @@ function ChildGridView(props) {
     };
 
     getViewOptions();
-  }, [relationPreferences, childObject, masterObject]);
+  }, [relationPreferences, viewOptions, childObject, masterObject]);
 
   useEffect(() => {
     /*  
@@ -726,7 +722,7 @@ function ChildGridView(props) {
     };
 
     createView();
-  }, [selectedView]);
+  }, [selectedView, childObject]);
 
   const autoGroupColumnDef = useMemo(() => {
     return {
