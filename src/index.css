@@ -44,3 +44,7 @@ table#qbproperypane {
 .highcontrast textarea#ruleContent {
   background-color: #000;
 }
+
+.go-green {
+  background-color: lightgreen;
+}

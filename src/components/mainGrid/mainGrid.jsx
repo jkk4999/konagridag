@@ -112,6 +112,10 @@ const MainGrid = React.forwardRef((props, ref) => {
   const [rowData, setRowData] = useState([]);
   const selectedGridRow = useRef(null);
 
+  // Create a lookup array.
+  // when a cell value is changed, its id is added here.
+  const changedCellIds = useRef([]);
+
   // local state
   const prevColumnDefs = useRef(null);
   const prevSelectedTemplate = useRef(null);
@@ -198,7 +202,8 @@ const MainGrid = React.forwardRef((props, ref) => {
         // create default grid columns
         let defaultGridCols = await ghf.createDefaultGridColumns(
           selectedObject.id,
-          objectMetadata
+          objectMetadata,
+          changedCellIds
         );
 
         setColumnDefs(defaultGridCols);
@@ -312,7 +317,8 @@ const MainGrid = React.forwardRef((props, ref) => {
           selectedObject.id,
           templateFieldData,
           objectMetadata,
-          gridRef
+          gridRef,
+          changedCellIds
         );
 
         setColumnDefs(gridCols);
@@ -456,30 +462,15 @@ const MainGrid = React.forwardRef((props, ref) => {
     return params.data.Id;
   };
 
-  function gridCellValueChanged(params) {
-    const rowIndex = params.rowIndex;
-    const columnName = params.column;
-    const columnDef = params.columnDef;
-    const oldValue = params.oldValue;
-    const newValue = params.newValue;
-
-    if (params.oldValue !== params.newValue) {
-      var column = params.column.colDef.field;
-      params.column.colDef.cellStyle = { backgroundColor: "#90EE90" };
-
-      params.api.refreshCells({
-        force: true,
-        columns: [params.column.getId()],
-        rowNodes: [params.node],
-      });
-
-      const rowId = params.node.data.Id;
-
-      if (!changedRowTracking.includes(rowId)) {
-        changedRowTracking.push(rowId);
-      }
+  const gridCellValueChanged = useCallback(({ node, data }) => {
+    if (!changedCellIds.current.includes(node.id)) {
+      // If id is not in array.
+      // add to array.
+      changedCellIds.current = [...changedCellIds.current, node.id];
     }
-  }
+    // Also, change the data
+    node.setData(data);
+  });
 
   function gridRowClicked(params) {
     selectedGridRow.current = params.data;

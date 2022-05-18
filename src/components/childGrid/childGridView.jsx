@@ -52,6 +52,7 @@ import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlin
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
 // import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import SaveTemplateIcon from "@mui/icons-material/ViewColumn";
+import selectedObjectSlice from "../../features/selectedObjectSlice";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -403,43 +404,44 @@ function ChildGridView(props) {
 
       console.log(`${childObject} grid - loading view options`);
 
-      // get relation preferences for the selected object
-      const relationPrefs = relationPreferences[0];
-
-      relationPrefs.relations.find((f) => f.object === masterObject.id);
-
+      // always have a Grid view
       let optionsList = ["Grid"];
 
-      if (relationPrefs) {
+      // get relation preferences for the selected object
+      const relationPref = relationPreferences.find(
+        (f) => f.object === masterObject.id
+      );
+
+      if (relationPref) {
         // find the prefs for the child object
-        const objPref = relationPrefs.relations.find(
+        const objPref = relationPref.relations.find(
           (r) => r.id === childObject
         );
 
-        if (objPref.ganttView) {
+        if (objPref && objPref.gantView) {
           optionsList.push("Gantt");
         }
 
-        if (objPref.kanbanView) {
+        if (objPref && objPref.kanbanView) {
           optionsList.push("Kanban");
         }
 
-        if (objPref.transpositionView) {
+        if (objPref && objPref.transpositionView) {
           optionsList.push("Transposition");
         }
 
-        if (objPref.scheduleView) {
+        if (objPref && objPref.scheduleView) {
           optionsList.push("Schedule");
         }
-
-        setViewOptions([...optionsList]);
-
-        prevViewOptions.current = [...optionsList];
-
-        setSelectedView(optionsList[0]);
-
-        prevSelectedView.current = optionsList[0];
       }
+
+      setViewOptions([...optionsList]);
+
+      prevViewOptions.current = [...optionsList];
+
+      setSelectedView(optionsList[0]);
+
+      prevSelectedView.current = optionsList[0];
     };
 
     getViewOptions();

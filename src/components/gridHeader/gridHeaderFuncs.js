@@ -8,7 +8,11 @@ import Tooltip from "@mui/material/Tooltip";
 
 // grid column functions
 
-export async function createDefaultGridColumns(selectedObject, objectMetadata) {
+export async function createDefaultGridColumns(
+  selectedObject,
+  objectMetadata,
+  changedCellIds
+) {
   // create grid columns for all fields found in metadata for the given types
 
   // get the object fields metadata
@@ -52,7 +56,7 @@ export async function createDefaultGridColumns(selectedObject, objectMetadata) {
     }
 
     // create the column
-    const col = await createGridField(field, fieldMetadata);
+    const col = await createGridField(field, fieldMetadata, changedCellIds);
 
     if (col.field !== null) {
       cols.push(col);
@@ -70,7 +74,8 @@ export async function createGridColumns(
   selectedObject,
   templateFields,
   objectMetadata,
-  gridRef
+  gridRef,
+  changedCellIds
 ) {
   // create grid columns for all fields found in metadata for the given types
   // then hide the columns not found in the template
@@ -120,7 +125,7 @@ export async function createGridColumns(
       }
 
       // create the column
-      const col = await createGridField(field, fieldMetadata);
+      const col = await createGridField(field, fieldMetadata, changedCellIds);
 
       if (col.field !== null) {
         cols.push(col);
@@ -250,7 +255,11 @@ export async function createGridColumns(
   }
 }
 
-export async function createGridField(metadataField, fieldMetadata) {
+export async function createGridField(
+  metadataField,
+  fieldMetadata,
+  changedCellIds
+) {
   // const selectedObject = useSelector((state) => state.selectedObject);
 
   const sfdcDataType = metadataField.dataType;
@@ -291,6 +300,10 @@ export async function createGridField(metadataField, fieldMetadata) {
   switch (sfdcDataType) {
     case "boolean": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         checkboxSelection: true,
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
@@ -309,6 +322,10 @@ export async function createGridField(metadataField, fieldMetadata) {
         options.push({ value: p.value, text: p.label })
       );
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -323,6 +340,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "currency": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -337,6 +358,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "date": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -353,6 +378,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "datetime": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -369,6 +398,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "decimal": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -385,6 +418,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "double": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -401,6 +438,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "email": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -415,6 +456,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "encryptedstring": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -429,6 +474,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "id": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -443,6 +492,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "int": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -458,6 +511,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "long": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -473,6 +530,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "percent": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -488,6 +549,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "phone": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -504,6 +569,10 @@ export async function createGridField(metadataField, fieldMetadata) {
       const options = [];
       metadataField.picklistValues.forEach((p) => options.push(p.value));
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         cellEditor: "agRichSelectCellEditor",
         cellEditorPopup: true,
         cellEditorParams: {
@@ -540,6 +609,10 @@ export async function createGridField(metadataField, fieldMetadata) {
       }
 
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         cellEditor: "autoCompleteEditor",
         cellEditorPopup: true,
         cellEditorParams: {
@@ -597,6 +670,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "string": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -611,6 +688,10 @@ export async function createGridField(metadataField, fieldMetadata) {
     }
     case "url": {
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -627,6 +708,10 @@ export async function createGridField(metadataField, fieldMetadata) {
       // only create columns for the types above
       // skip the rest (such as compound fields and blobs)
       return {
+        cellClassRules: {
+          // Check if id in lookup aray.
+          "go-green": ({ node }) => changedCellIds.current.includes(node.id),
+        },
         editable: false,
         field: null,
         headerName: null,
