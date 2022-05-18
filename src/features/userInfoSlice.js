@@ -7,7 +7,6 @@ export const userInfoSlice = createSlice({
   initialState,
   reducers: {
     setUserInfo: (state, { payload }) => {
-      // mutate existing state
       return payload;
     },
   },

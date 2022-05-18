@@ -1,7 +1,8 @@
 // React
 import * as React from "react";
 import { connect } from "react-redux";
-import { setQueryRule } from "../features/queryRuleSlice";
+// import { setQueryRule } from "../features/queryRuleSlice";
+import { setToolbarState } from "../features/toolbarStateSlice";
 
 // Syncfusion
 import { getComponent } from "@syncfusion/ej2-base";
@@ -43,8 +44,8 @@ class DateTemplate extends React.Component {
 }
 
 function mapStateToProps(state) {
-  const selectedObject = state.selectedObject;
-  const queryColumns = state.queryColumns;
+  const selectedObject = state.toolbarState.selectedObject;
+  const queryColumns = state.toolbarState.queryColumns;
   const gridData = state.gridData;
   const objectMetadata = state.objectMetadata;
   return {
@@ -58,7 +59,13 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
   return {
     setQueryRule: (rule) => {
-      dispatch(setQueryRule(rule));
+      // dispatch(setQueryRule(rule));
+
+      // make copy of toolbar state
+      const newToolbarState = { ...this.state.toolbarState };
+      newToolbarState.queryRule = rule;
+
+      dispatch(setToolbarState(newToolbarState));
     },
   };
 }

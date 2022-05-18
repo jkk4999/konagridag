@@ -10,7 +10,7 @@ import React, {
 // redux
 import { addMetadata } from "../../features/objectMetadataSlice";
 
-import { setObjectPreferences } from "../../features/objectPreferencesSlice";
+import { setToolbarState } from "../../features/toolbarStateSlice";
 
 import { useSelector, useDispatch } from "react-redux";
 
@@ -47,7 +47,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 export default (props) => {
-  const orgObjects = props.orgObjects;
+  // const orgObjects = props.orgObjects;
 
   // Snackbar
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
@@ -55,7 +55,10 @@ export default (props) => {
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
-  const objectPreferences = useSelector((state) => state.objectPreferences);
+  const toolbarState = useSelector((state) => state.toolbarState);
+  const objectPreferences = toolbarState.objectPreferences;
+  const selectedObject = toolbarState.selectedObject;
+  const objectOptions = toolbarState.objectOptions;
 
   // local object references
   const objectPreferencesGridRef = useRef(null);
@@ -63,7 +66,6 @@ export default (props) => {
   // local state
   const [colDefs, setColDefs] = useState([]);
   const [gridData, setGridData] = useState([]);
-  const selectedObject = useSelector((state) => state.selectedObject);
 
   const dispatch = useDispatch();
 
@@ -71,19 +73,25 @@ export default (props) => {
   useEffect(() => {
     const getObjectPreferences = async () => {
       try {
-        if (!orgObjects || orgObjects.length === 0) {
+        if (!objectOptions || objectOptions.length === 0) {
+          return;
+        }
+
+        if (objectPreferences.length > 0) {
           return;
         }
 
         // create a grid record for each org object
         const objArray = [];
 
-        orgObjects.forEach((r) => {
+        objectOptions.forEach((r) => {
           const newObj = {
             id: r.id,
             selected: false,
+            transpositionView: false,
             ganttView: false,
-            timeSeriesView: false,
+            kanbanView: false,
+            scheduleView: false,
           };
           objArray.push(newObj);
         });
@@ -147,8 +155,10 @@ export default (props) => {
           const rec = objArray.find((f) => f.id === p.object);
           if (rec) {
             rec.selected = true;
+            rec.transpositionView = p.transpositionView;
             rec.ganttView = p.ganttView;
-            rec.timeSeriesView = p.timeSeriesView;
+            rec.kanbanView = p.kanbanView;
+            rec.scheduleView = p.scheduleView;
           }
         });
 
@@ -176,11 +186,25 @@ export default (props) => {
           field: "selected",
           filter: true,
           headerName: "Selected",
+          onChange: () => {},
           sortable: true,
           width: 125,
         };
 
         gridCols.push(selectedCol);
+
+        const transpositionViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "transpositionView",
+          filter: true,
+          headerName: "Transposition",
+          onChange: () => {},
+          sortable: true,
+          width: 150,
+        };
+
+        gridCols.push(transpositionViewCol);
 
         const ganttViewCol = {
           cellRenderer: AgGridCheckbox,
@@ -188,23 +212,38 @@ export default (props) => {
           field: "ganttView",
           filter: true,
           headerName: "Gantt",
+          onChange: () => {},
           sortable: true,
-          width: 100,
+          width: 125,
         };
 
         gridCols.push(ganttViewCol);
 
-        const timeSeriesViewCol = {
+        const kanbanViewCol = {
           cellRenderer: AgGridCheckbox,
           editable: true,
-          field: "timeSeriesView",
+          field: "kanbanView",
           filter: true,
-          headerName: "Time Series",
+          headerName: "Kanban",
+          onChange: () => {},
           sortable: true,
-          width: 150,
+          width: 125,
         };
 
-        gridCols.push(timeSeriesViewCol);
+        gridCols.push(kanbanViewCol);
+
+        const scheduleViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "scheduleView",
+          filter: true,
+          headerName: "Schedule",
+          onChange: () => {},
+          sortable: true,
+          width: 125,
+        };
+
+        gridCols.push(scheduleViewCol);
 
         // supply column definitions to grid
         setColDefs(gridCols);
@@ -276,8 +315,10 @@ export default (props) => {
               if (rec.selected === true) {
                 const newPref = {
                   object: rec.id,
+                  transpositionView: rec.transpositionView,
                   ganttView: rec.ganttView,
-                  timeSeriesView: rec.timeSeriesView,
+                  kanbaniew: rec.kanbanView,
+                  scheduleView: rec.scheduleView,
                 };
                 selectedObjectPrefs.push(newPref);
               }
@@ -323,7 +364,22 @@ export default (props) => {
 
               const userPrefRec = insertResult.records[0];
 
-              dispatch(setObjectPreferences(userPrefRec.preferences));
+              // update the object options list
+              const filteredObjects = [];
+              selectedObjectPrefs.forEach((p) => {
+                // get the option
+                const opt = objectOptions.find((f) => f.id === p.object);
+                if (opt) {
+                  filteredObjects.push(opt);
+                }
+              });
+
+              // create copy of app state
+              const newState = { ...toolbarState };
+              newState.objectPreferences = userPrefRec.preferences;
+              newState.objectOptionsFiltered = [...filteredObjects];
+
+              dispatch(setToolbarState(newState));
             } catch (error) {
               // notify user of error
               const snackOptions = {
@@ -336,7 +392,7 @@ export default (props) => {
                 TransitionComponent: Slide,
               };
 
-              const key = enqueueSnackbar(error.message, snackOptions);
+              enqueueSnackbar(error.message, snackOptions);
             }
           }}
           variant='contained'

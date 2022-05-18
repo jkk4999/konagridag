@@ -8,7 +8,6 @@ export const selectedQuerySlice = createSlice({
   initialState,
   reducers: {
     setSelectedQuery: (state, { payload }) => {
-      // replace existing state
       return payload;
     },
   },

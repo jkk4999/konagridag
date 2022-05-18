@@ -19,14 +19,19 @@ import TextField from "@mui/material/TextField";
 
 import { CircularProgress } from "@mui/material";
 
+const returnVal = null;
+
 const AgGridAutocomplete = React.forwardRef((props, ref) => {
   const relation = props.relation;
 
   const [options, setOptions] = useState([]);
-  const [value, setValue] = useState(parseInt(props.value));
-  const [open, setOpen] = React.useState(false); // if dropdown open?
+
+  // the id value
+  const [value, setValue] = useState();
+
+  // the id name displayed in the text field
   const [inputValue, setInputValue] = React.useState("");
-  const loaded = React.useRef(false);
+
   const refInput = useRef(null);
 
   // Snackbar
@@ -35,10 +40,7 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
   useEffect(() => {
     // focus on the input
     refInput.current.focus();
-  }, []);
-
-  useEffect(() => {
-    // get search results
+    // setValue(props.value);
   }, []);
 
   /* Component Editor Lifecycle methods */
@@ -46,7 +48,6 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
     return {
       // the final value to send to the grid, on completion of editing
       getValue() {
-        // this simple editor doubles any value entered into the input
         return value;
       },
 
@@ -60,7 +61,7 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
       // If you return true, then the result of the edit will be ignored.
       isCancelAfterEnd() {
         // our editor will reject any value greater than 1000
-        return value;
+        return false;
       },
     };
   });
@@ -69,7 +70,7 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
     // use the changed value to make request and then use the result. Which
     console.log(value);
 
-    if (!value || value.length < 2) {
+    if (!value || value.length < 3) {
       return;
     }
 
@@ -153,17 +154,18 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
     }
   };
 
+  const onChange = (event, value) => {
+    setOptions(options);
+    setValue(value);
+  };
+
   return (
     <Stack sx={{ width: 300, margin: "auto" }}>
       <AutoComplete
         sx={{ width: 300 }}
         autoComplete
-        onChange={(event, newValue) => {
-          if (newValue) {
-            setOptions(options);
-            setValue(newValue.id);
-          }
-        }}
+        // inputValue={inputValue}
+        onChange={onChange}
         onInputChange={onInputChange}
         getOptionLabel={(option) => option.label}
         noOptionsText={"No records found"}
@@ -174,20 +176,18 @@ const AgGridAutocomplete = React.forwardRef((props, ref) => {
             {searchResults.label}
           </Box>
         )}
-        //   renderInput={(params) => (
-        //     <TextField
-        //       {...params}
-        //       label=''
-        //       variant='standard'
-        //       onChange={(ev) => {
-        //         if (ev.target.value !== "" || ev.target.value !== null) {
-        //           onChangeHandle(ev.target.value);
-        //         }
-        //       }}
-        //     />
-        //   )}
         renderInput={(params) => (
-          <TextField {...params} label='Combo box' variant='standard' />
+          <TextField
+            {...params}
+            label='Combo box'
+            variant='standard'
+            onChange={(event, newValue) => {
+              if (newValue) {
+                // setOptions(options);
+                setValue(newValue.id);
+              }
+            }}
+          />
         )}
         size='small'
         value={value}

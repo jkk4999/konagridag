@@ -8,7 +8,6 @@ export const selectedTemplateSlice = createSlice({
   initialState,
   reducers: {
     setSelectedTemplate: (state, { payload }) => {
-      // replace existing state
       return payload;
     },
   },

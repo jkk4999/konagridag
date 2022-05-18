@@ -9,9 +9,6 @@ import React, {
 
 // Redux
 import { useSelector, useDispatch } from "react-redux";
-import { addGridState } from "../../features/childGridStateSlice";
-import { removeGridState } from "../../features/childGridStateSlice";
-import { updateGridState } from "../../features/childGridStateSlice";
 
 // save template dialog
 import SaveTemplateDialog from "../../components/saveTemplateDialog/saveTemplateDialog";
@@ -37,14 +34,7 @@ import { makeStyles } from "@mui/styles";
 import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
 import { IconButton } from "@mui/material";
-import Button from "@mui/material/Button";
-import { Checkbox } from "@mui/material";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import { FormControlLabel } from "@mui/material";
-import { Stack } from "@mui/material";
+
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Toolbar from "@mui/material/Toolbar";
@@ -79,7 +69,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function ChildGridView(props) {
-  const { masterObject, childObject, masterGridRef, selectedGridRow } = props;
+  const { masterObject, childObject, selectedGridRow } = props;
 
   // only allow 1 expanded row
   // masterGridRef.api.forEachNode((node) => {
@@ -92,12 +82,15 @@ function ChildGridView(props) {
 
   // local state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [prevSelectedTemplate, setPrevSelectedTemplate] = useState(null);
+  const prevSelectedTemplate = useRef(null);
+  const prevSelectedView = useRef(null);
 
   // redux global state
-  const dispatch = useDispatch();
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
+  const relationPreferences = useSelector(
+    (state) => state.toolbarState.relationPreferences
+  );
 
   // local state// previous state values
   const [rowData, setRowData] = useState([]);
@@ -106,11 +99,12 @@ function ChildGridView(props) {
   const prevColDefs = useRef(null);
   const [templateOptions, setTemplateOptions] = useState(null);
   const [changedRows, setChangedRows] = useState(null);
+  const prevRelationPrefs = useRef(null);
+  const prevViewOptions = useRef(null);
+  const prevSelectedGridRow = useRef(null);
 
   // local object references
   const gridRef = useRef(null);
-  const saveTemplateGridRef = useRef(null);
-  const templateVisibilityRef = useRef(null);
   const templateSelectorRef = useRef(null);
   const [viewOptions, setViewOptions] = useState([]);
   const [selectedView, setSelectedView] = useState(null);
@@ -121,10 +115,9 @@ function ChildGridView(props) {
   const [saveTemplateGridData, setSaveTemplateGridData] = useState([]);
   const [saveTemplateFormOpen, setSaveTemplateFormOpen] = useState(false);
   const [saveTemplateName, setSaveTemplateName] = useState("");
-  const templateVisibility = useRef(false);
 
   // Snackbar
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
+  const { enqueueSnackbar } = useSnackbar();
 
   const containerStyle = useMemo(() => ({ width: "95%", height: "90%" }), []);
 
@@ -187,11 +180,11 @@ function ChildGridView(props) {
   }
 
   function gridCellValueChanged(params) {
-    const rowIndex = params.rowIndex;
-    const columnName = params.column;
-    const columnDef = params.columnDef;
-    const oldValue = params.oldValue;
-    const newValue = params.newValue;
+    // const rowIndex = params.rowIndex;
+    // const columnName = params.column;
+    // const columnDef = params.columnDef;
+    // const oldValue = params.oldValue;
+    // const newValue = params.newValue;
 
     // add row ID to row tracking state
     let rows = [];
@@ -209,10 +202,6 @@ function ChildGridView(props) {
   }
 
   // TEMPLATE FUNCTIONS
-
-  function onCloseTemplateForm() {
-    saveTemplateFormOpen(false);
-  }
 
   async function saveTemplate() {
     // called from Grid toolbar
@@ -406,41 +395,60 @@ function ChildGridView(props) {
     }
   }
 
-  // run once when mounted
-  // set the view options
+  // populate view selector when relationPreferences changes
   useEffect(() => {
     const getViewOptions = async () => {
-      // set view options
-      const objPrefResult = await gf.getObjectPreferences(userInfo);
-
-      if (objPrefResult.status === "error") {
-        throw new Error("Error retrieving user object preferences");
+      if (_.isEqual(prevViewOptions.current, viewOptions)) {
+        return;
       }
 
-      if (objPrefResult.records.length > 0) {
-        const userObjPrefRec = objPrefResult.records[0];
+      if (selectedView === prevSelectedView.current) {
+        return;
+      }
 
-        const prefArray = userObjPrefRec.preferences;
+      console.log(`${childObject} grid - loading view options`);
 
-        const objectViewOptions = prefArray.find(
-          (p) => p.object === childObject
+      // get relation preferences for the selected object
+      const relationPrefs = relationPreferences[0];
+
+      relationPrefs.relations.find((f) => f.object === masterObject.id);
+
+      let optionsList = ["Grid"];
+
+      if (relationPrefs) {
+        // find the prefs for the child object
+        const objPref = relationPrefs.relations.find(
+          (r) => r.id === childObject
         );
 
-        let optionsList = ["Grid"];
-        if (objectViewOptions.ganttView === true) {
+        if (objPref.ganttView) {
           optionsList.push("Gantt");
         }
-        if (objectViewOptions.timeSeriesView === true) {
-          optionsList.push("Time Series");
+
+        if (objPref.kanbanView) {
+          optionsList.push("Kanban");
         }
 
-        setViewOptions(optionsList);
+        if (objPref.transpositionView) {
+          optionsList.push("Transposition");
+        }
+
+        if (objPref.scheduleView) {
+          optionsList.push("Schedule");
+        }
+
+        setViewOptions([...optionsList]);
+
+        prevViewOptions.current = [...optionsList];
+
         setSelectedView(optionsList[0]);
+
+        prevSelectedView.current = optionsList[0];
       }
     };
 
     getViewOptions();
-  }, []);
+  }, [relationPreferences, childObject, masterObject]);
 
   useEffect(() => {
     /*  
@@ -453,13 +461,9 @@ function ChildGridView(props) {
         return;
       }
 
-      console.log(`Configuring child grid ${childObject}`);
-
-      let currentTemplate = null;
+      console.log(`configureGrid useEffect running for ${childObject}`);
 
       setLoadingIndicator(true);
-
-      let gridCols = [];
 
       try {
         // get template records
@@ -486,7 +490,7 @@ function ChildGridView(props) {
 
         setTemplateOptions(tmpOptions);
 
-        // check for grid preferences
+        // get user preferences
         const prefResult = await gf.getGridPreferences(
           childObject,
           true, // is_related
@@ -507,67 +511,11 @@ function ChildGridView(props) {
           );
         }
 
-        if (prefData.length === 1) {
-          // get template preferenceId
-          const templatePrefId = Number(prefData[0].templateid);
+        const userPref =
+          prefResult.records.length > 0 ? prefResult.records[0] : null;
 
-          // find the template option with this Id
-          const tmpOption = tmpOptions.find((o) => o.id === templatePrefId);
-
-          // use this template
-          setSelectedTemplate(tmpOption);
-          currentTemplate = { ...tmpOption };
-        }
-
-        // if no preferences, check for defaults
-        const defaultTemplateResult = await gf.getDefaultTemplates(
-          childObject,
-          userInfo.orgid,
-          true, // default
-          true, // is_active
-          true, // is_public
-          true, // is_related,
-          null // owner
-        );
-
-        if (defaultTemplateResult.status === "error") {
-          throw new Error(
-            `Error retrieving template defaults for ${childObject}`
-          );
-        }
-
-        const defaultTemplates = defaultTemplateResult.records;
-
-        if (defaultTemplates.length > 1) {
-          // default templates only valid for public templates
-          // there should only be 1 default template per object
-          throw new Error(
-            `Error - found more than 1 default template for ${childObject}`
-          );
-        }
-
-        if (defaultTemplates.length === 1) {
-          const defaultTemplate = defaultTemplates[0];
-
-          // find the template option with this Id
-          const defaultTemplateOption = tmpOptions.find(
-            (t) => t.id === Number(defaultTemplate.id)
-          );
-
-          setSelectedTemplate(defaultTemplateOption);
-          currentTemplate = { ...defaultTemplateOption };
-        }
-
-        if (defaultTemplates.length === 0 && tmpOptions.length > 0) {
-          // no default template, so pick the first template
-          setSelectedTemplate(tmpOptions[0]);
-          currentTemplate = { ...tmpOptions[0] };
-        }
-
-        if (tmpOptions.length === 0) {
-          // no templates defined for this object
-
-          // create default grid columns
+        if (templateData.length === 0) {
+          // no templates defined for this object - create default grid columns
           let defaultGridCols = await gf.createDefaultGridColumns(
             childObject,
             objectMetadata
@@ -576,7 +524,52 @@ function ChildGridView(props) {
           setColDefs(defaultGridCols);
           prevColDefs.current = defaultGridCols;
 
-          return;
+          setTemplateOptions([]);
+          setSelectedTemplate(null);
+          console.log(
+            `No templates found for ${childObject}.  Creating default grid columns.`
+          );
+        }
+
+        if (templateData.length > 0) {
+          // check for template user preference
+          if (userPref) {
+            // find the template option with this Id
+            const tmpOption = tmpOptions.find(
+              (o) => o.id === userPref.templateid
+            );
+
+            // use this template
+            setSelectedTemplate(tmpOption);
+
+            console.log(
+              `Found template user preference for ${tmpOption.label}`
+            );
+          }
+
+          if (!userPref) {
+            // check for default template preference
+            let defaultPref = templateData.forEach((t) => t.default === true);
+            if (defaultPref !== undefined) {
+              defaultPref = {
+                id: defaultPref.id,
+                label: defaultPref.template_name,
+              };
+              setSelectedTemplate(defaultPref);
+              console.log(
+                `Found template default preference for ${defaultPref.label}`
+              );
+            }
+
+            // no defaults found
+            if (defaultPref === undefined) {
+              // use the first template
+              setSelectedTemplate(tmpOptions[0]);
+              console.log(
+                `No user or default template preferences found for ${childObject}`
+              );
+            }
+          }
         }
 
         setLoadingIndicator(false);
@@ -606,24 +599,28 @@ function ChildGridView(props) {
     childObject,
     masterObject,
     selectedGridRow,
-    dispatch,
     colDefs,
     objectMetadata,
     userInfo,
     enqueueSnackbar,
   ]);
 
+  // selectedTemplate changed
   useEffect(() => {
     /*  when the selected template changes
       1 - create the grid columns
     */
 
     const createGridColumns = async () => {
-      if (_.isEqual(selectedTemplate, prevSelectedTemplate)) {
+      if (_.isEqual(selectedTemplate, prevSelectedTemplate.current)) {
         return;
       }
 
-      setPrevSelectedTemplate({ ...selectedTemplate });
+      console.log(
+        `${childObject} grid selectedTemplateChanged() - creating grid columns`
+      );
+
+      prevSelectedTemplate.current = selectedTemplate;
 
       if (selectedTemplate) {
         const result = await gf.getTemplateFields(selectedTemplate);
@@ -646,15 +643,20 @@ function ChildGridView(props) {
     };
 
     createGridColumns();
-  }, [selectedTemplate]);
+  }, [selectedTemplate, childObject, objectMetadata, prevSelectedTemplate]);
 
+  // selectedRow changed
   useEffect(() => {
     // get the data when the selected row changes
 
     const getData = async () => {
-      if (_.isEqual(rowData, prevRowData)) {
+      if (_.isEqual(selectedGridRow, prevSelectedGridRow.current)) {
         return;
       }
+
+      prevSelectedGridRow.current = selectedGridRow;
+
+      console.log(`${childObject} grid selectedRowChanged - getData())`);
 
       // get the data
       let whereClause = null;
@@ -681,15 +683,9 @@ function ChildGridView(props) {
     };
 
     getData();
-  }, [
-    selectedGridRow,
-    childObject,
-    colDefs,
-    rowData,
-    dispatch,
-    masterObject.id,
-  ]);
+  }, [selectedGridRow, childObject, colDefs, rowData, masterObject.id]);
 
+  // selectedView changed
   useEffect(() => {
     /*
         1 - create the child view based on user input
@@ -700,21 +696,36 @@ function ChildGridView(props) {
         return;
       }
 
+      console.log(`${childObject} grid selectedViewChanged())`);
+
       switch (selectedView) {
         case "Grid": {
           // TBD
-          break;
+          return <h1>Grid View</h1>;
         }
         case "Gantt": {
           // TBD
-          break;
+          return <h1>Gantt View</h1>;
         }
-        case "Time Series": {
+        case "Transposition": {
           // TBD
-          break;
+          return <h1>Transposition View</h1>;
+        }
+        case "Schedule": {
+          // TBD
+          return <h1>Schedule View</h1>;
+        }
+        case "Kanban": {
+          // TBD
+          return <h1>Kanban View</h1>;
+        }
+        default: {
+          return <h1>No view found</h1>;
         }
       }
     };
+
+    createView();
   }, [selectedView]);
 
   const autoGroupColumnDef = useMemo(() => {
@@ -734,7 +745,7 @@ function ChildGridView(props) {
       }}
       className={classes.gridStyle}
     >
-      <SaveTemplateDialog
+      {/* <SaveTemplateDialog
         saveTemplateFormOpen={saveTemplateFormOpen}
         setSaveTemplateFormOpen={setSaveTemplateFormOpen}
         templateName={saveTemplateName}
@@ -747,7 +758,7 @@ function ChildGridView(props) {
         setTemplateOptions={setTemplateOptions}
         setColumnDefs={setColDefs}
         gridRef={gridRef}
-      />
+      /> */}
 
       {/* grid toolbar */}
       <Toolbar
@@ -865,9 +876,11 @@ function ChildGridView(props) {
         <Autocomplete
           id='templateSelector'
           autoComplete
+          getOptionLabel={(option) => (option ? option.label : "")}
           includeInputInList
+          isOptionEqualToValue={(option, value) => option.id === value.id}
           options={templateOptions}
-          value={selectedTemplate}
+          value={selectedTemplate ? selectedTemplate : null}
           ref={templateSelectorRef}
           renderInput={(params) => (
             <TextField {...params} label='Templates' variant='standard' />

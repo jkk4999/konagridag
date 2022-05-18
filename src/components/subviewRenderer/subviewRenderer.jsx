@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 
 // import { useSelector } from "react-redux";
@@ -12,7 +12,12 @@ import TabPanel from "@mui/lab/TabPanel";
 // components
 import ChildGridView from "../../components/childGrid/childGridView";
 
-const DetailCellRenderer = (props) => {
+// Lodash
+import _ from "lodash";
+
+function DetailCellRenderer(props) {
+  console.log("Detail cell renderer executing");
+
   const masterObject = props.masterObject;
   const masterGridRef = props.masterGridRef;
   // const relationPreferences = props.relationPreferences;
@@ -21,7 +26,11 @@ const DetailCellRenderer = (props) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = React.useState("");
 
-  const relationPreferences = useSelector((state) => state.relationPreferences);
+  const prevRelationPrefs = useRef(null);
+
+  const relationPreferences = useSelector(
+    (state) => state.toolbarState.relationPreferences
+  );
 
   const handleChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -29,11 +38,17 @@ const DetailCellRenderer = (props) => {
 
   // create the tabs when the relationship preferences changes
   useEffect(() => {
-    if (!relationPreferences || relationPreferences.length === 0) {
+    if (!relationPreferences) {
+      return;
+    }
+
+    if (_.isEqual(relationPreferences, prevRelationPrefs.current)) {
       return;
     }
 
     console.log("Creating the subview tabs");
+
+    prevRelationPrefs.current = { ...relationPreferences };
 
     const tabArray = [];
 
@@ -49,8 +64,8 @@ const DetailCellRenderer = (props) => {
       const name = objectPreferences.relations[i];
 
       const newTab = {
-        value: name.obj,
-        label: name.obj,
+        value: name.id,
+        label: name.id,
       };
       tabArray.push(newTab);
     }
@@ -60,39 +75,45 @@ const DetailCellRenderer = (props) => {
     if (tabArray.length > 0) {
       setSelectedTab(tabArray[0].value);
     }
-  }, [relationPreferences]);
+  }, [relationPreferences, masterObject]);
 
-  return (
-    <Box sx={{ width: "100%", typography: "body1", height: 400 }}>
-      <TabContext value={selectedTab}>
-        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-          {/* create the tabs */}
-          <TabList onChange={handleChange} aria-label='lab API tabs example'>
-            {tabs.map((tab, index) => {
-              return (
-                <Tab key={tab.value} label={tab.label} value={tab.value} />
-              );
-            })}
-          </TabList>
-        </Box>
+  if (tabs.length > 0) {
+    return (
+      <Box sx={{ width: "100%", typography: "body1", height: 400 }}>
+        <TabContext value={selectedTab}>
+          <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+            {/* create the tabs */}
+            <TabList onChange={handleChange} aria-label='lab API tabs example'>
+              {tabs.map((tab, index) => {
+                return (
+                  <Tab key={tab.value} label={tab.label} value={tab.value} />
+                );
+              })}
+            </TabList>
+          </Box>
 
-        {/* create the tab panels */}
-        {tabs.map((tab, index) => {
-          return (
-            <TabPanel value={tab.value}>
-              <ChildGridView
-                masterObject={masterObject}
-                childObject={tab.value}
-                masterGridRef={masterGridRef}
-                selectedGridRow={selectedGridRow}
-              />
-              )
-            </TabPanel>
-          );
-        })}
-      </TabContext>
-    </Box>
-  );
-};
+          {/* create the tab panels */}
+          {tabs.map((tab, index) => {
+            return (
+              <TabPanel key={tab.value + "-panel"} value={tab.value}>
+                <ChildGridView
+                  masterObject={masterObject}
+                  childObject={tab.value}
+                  masterGridRef={masterGridRef}
+                  selectedGridRow={selectedGridRow}
+                />
+                {/* <div>
+                  <h1>{tab.value} child grid</h1>
+                </div> */}
+              </TabPanel>
+            );
+          })}
+        </TabContext>
+      </Box>
+    );
+  } else {
+    return <div />;
+  }
+}
 
-export default DetailCellRenderer;
+export default React.memo(DetailCellRenderer);

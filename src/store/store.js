@@ -13,6 +13,7 @@ import objectOptionsReducer from "../features/objectOptionsSlice";
 import objectMetadataReducer from "../features/objectMetadataSlice";
 import objectPreferencesReducer from "../features/objectPreferencesSlice";
 import queryBuilderVisabilityReducer from "../features/queryBuilderVisabilitySlice";
+import queryChangedReducer from "../features/queryChangedSlice";
 import queryPanelVisabilityReducer from "../features/queryPanelVisabilitySlice";
 import queryListReducer from "../features/queryListSlice";
 import queryColumnsReducer from "../features/queryColumnsSlice";
@@ -31,6 +32,7 @@ import relationPreferencesReducer from "../features/relationPreferencesSlice";
 import selectedAppReducer from "../features/selectedAppSlice";
 import selectedAppTitleReducer from "../features/selectedAppTitleSlice";
 import selectedGridRowReducer from "../features/selectedGridRowSlice";
+import selectedGridViewReducer from "../features/selectedGridViewSlice";
 import selectedObjectReducer from "../features/selectedObjectSlice";
 import selectedQueryReducer from "../features/selectedQuerySlice";
 import selectedQueryColumnsReducer from "../features/queryColumnsSlice";
@@ -43,6 +45,7 @@ import sortSettingsReducer from "../features/sortSettingsSlice";
 import templateListReducer from "../features/templateListSlice";
 import templateFieldsReducer from "../features/templateFieldsSlice";
 import templateOptionsReducer from "../features/templateOptionsSlice";
+import toolbarStateReducer from "../features/toolbarStateSlice";
 import userInfoReducer from "../features/userInfoSlice";
 
 export default configureStore({
@@ -63,10 +66,11 @@ export default configureStore({
     objectPreferences: objectPreferencesReducer,
     query: selectedQueryReducer,
     queryBuilderVisible: queryBuilderVisabilityReducer,
-    queryPanelVisible: queryPanelVisabilityReducer,
+    queryChanged: queryChangedReducer,
     queryColumns: queryColumnsReducer,
     queryList: queryListReducer,
     queryOptions: queryOptionsReducer,
+    queryPanelVisible: queryPanelVisabilityReducer,
     queryRule: queryRuleReducer,
     queryRuleText: queryRuleTextReducer,
     relatedGridColumns: relatedGridColumnsReducer,
@@ -80,6 +84,7 @@ export default configureStore({
     selectedApp: selectedAppReducer,
     selectedAppTitle: selectedAppTitleReducer,
     selectedGridRow: selectedGridRowReducer,
+    selectedGridView: selectedGridViewReducer,
     selectedObject: selectedObjectReducer,
     selectedQuery: selectedQueryReducer,
     selectedQueryColumns: selectedQueryColumnsReducer,
@@ -92,6 +97,7 @@ export default configureStore({
     templateList: templateListReducer,
     templateFields: templateFieldsReducer,
     templateOptions: templateOptionsReducer,
+    toolbarState: toolbarStateReducer,
     userInfo: userInfoReducer,
   },
   middleware: (getDefaultMiddleware) =>

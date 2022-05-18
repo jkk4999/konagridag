@@ -28,7 +28,7 @@ if (!DATABASE_URL) {
 }
 
 const fastify = require("fastify")({
-  logger: true,
+  logger: false,
   ignoreTrailingSlash: true,
   bodyLimit: 104857600, // 100MB
 });
@@ -50,7 +50,7 @@ fastify.register(require("fastify-knexjs"), {
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   },
-  debug: true,
+  debug: false,
 });
 
 // Salesforce API

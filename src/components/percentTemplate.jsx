@@ -2,6 +2,7 @@
 import * as React from "react";
 import { connect } from "react-redux";
 import { setQueryRule } from "../features/queryRuleSlice";
+import { setToolbarState } from "../features/toolbarStateSlice";
 
 // Syncfusion
 import { getComponent } from "@syncfusion/ej2-base";
@@ -59,7 +60,13 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
   return {
     setQueryRule: (rule) => {
-      dispatch(setQueryRule(rule));
+      // dispatch(setQueryRule(rule));
+
+      // make copy of toolbar state
+      const newToolbarState = { ...this.state.toolbarState };
+      newToolbarState.queryRule = rule;
+
+      dispatch(setToolbarState(newToolbarState));
     },
   };
 }

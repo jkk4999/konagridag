@@ -1,49 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-
-// Redux
-import { addMetadata } from "../../features/objectMetadataSlice";
-import { setTemplateOptions } from "../../features/templateOptionsSlice";
-import { setSelectedObject } from "../../features/selectedObjectSlice";
-import { setQueryOptions } from "../../features/queryOptionsSlice";
-import { setSelectedTemplate } from "../../features/selectedTemplateSlice";
-import { setSelectedQuery } from "../../features/querySlice";
-import { addQueryColumns } from "../../features/queryColumnsSlice";
-import { setGridData } from "../../features/gridDataSlice";
-
-// queryBuilder components (MUI)
-import MuiAutoComplete from "../../components/queryBuilder/muiAutoComplete";
-import MuiCheckbox from "../../components/queryBuilder/muiCheckBox";
-import MuiDate from "../../components/queryBuilder/muiDate";
-import MuiText from "../../components/queryBuilder/muiText";
-
-// queryBuilder components (Syncfusion)
-import { getComponent, isNullOrUndefined } from "@syncfusion/ej2-base";
-import { DropDownList } from "@syncfusion/ej2-react-dropdowns";
-import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
-import { DatePickerComponent } from "@syncfusion/ej2-react-calendars";
-import { NumericTextBoxComponent } from "@syncfusion/ej2-react-inputs";
-
-// AgGrid cell renderers
-import TextRenderer from "../../components/aggrid/cellRenderers/selectText";
-
-// AgGrid cell editors
-// import { AutocompleteSelectCellEditor } from "ag-grid-autocomplete-editor";
-// import "ag-grid-autocomplete-editor/dist/main.css";
-// import AgGridAutocomplete from "../../components/aggridAutoComplete";
-import AutoComplete from "../../components/autoCompleteEditor";
+import React from "react";
 
 // MUI
 import Box from "@mui/material/Box";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { IconButton } from "@mui/material";
 import Tooltip from "@mui/material/Tooltip";
-
-// Snackbar
-import { useSnackbar } from "notistack";
-import { Slide } from "@mui/material";
-import autoCompleteEditor from "../../components/autoCompleteEditor";
 
 // grid column functions
 
@@ -237,7 +198,6 @@ export async function createGridColumns(
 
     // apply sorting, grouping and aggregrations
     // hide group columns
-    const columnSort = [];
     colOrder.forEach((c, index) => {
       if (c.field === "error") {
         return;
@@ -295,8 +255,6 @@ export async function createGridField(metadataField, fieldMetadata) {
 
   const sfdcDataType = metadataField.dataType;
   const fieldLabel = fieldMetadata.label;
-
-  const fieldName = metadataField.name;
 
   var numberValueFormatter = function (params) {
     return params.value ? params.value.toFixed(2) : null;
@@ -602,8 +560,6 @@ export async function createGridField(metadataField, fieldMetadata) {
           const field = params.colDef.field;
           const rec = params.data;
 
-          // console.log(`field = ${field}`);
-
           let relation = null;
           if (field.slice(-2) === "Id") {
             relation = field.slice(0, -2);
@@ -613,9 +569,7 @@ export async function createGridField(metadataField, fieldMetadata) {
             relation = field.slice(0, -3);
           }
 
-          // console.log(`relation = ${relation}`);
-
-          if (params.value !== null && rec.hasOwnProperty(relation)) {
+          if (rec.hasOwnProperty(relation)) {
             if (field === "Case") {
               return rec[relation].CaseNumber;
             }
@@ -624,15 +578,7 @@ export async function createGridField(metadataField, fieldMetadata) {
               return rec[relation].ContractNumber;
             }
 
-            if (field === "IndividualId") {
-              return params.value;
-            }
-
-            if (field === "ReportsToId") {
-              const a = 1;
-            }
-
-            if (rec[relation].Name !== null) {
+            if (rec[relation].Name) {
               return rec[relation].Name;
             } else {
               return params.value;
@@ -899,7 +845,6 @@ export async function createQueryColumn(metadataField) {
 }
 
 // query functions
-
 export async function getDefaultQueries(
   object,
   orgid,
@@ -908,8 +853,6 @@ export async function getDefaultQueries(
   is_public,
   owner
 ) {
-  let templates = null;
-
   const url = "/postgres/knexSelect";
 
   // get all columns
@@ -1270,6 +1213,332 @@ export async function selectedQueryChanged(selectedObject, selectedQuery) {
   }
 }
 
+function getFieldDataType(fieldName, objFields) {
+  let fieldDataType = null;
+
+  // const objMetadata = metadataMap.get(objName);
+  // const objFields = objMetadata.fields;
+  const objField = objFields.find((f) => f.name === fieldName);
+  fieldDataType = objField.dataType;
+  return fieldDataType;
+}
+
+function processRule(rule, objFields) {
+  // called from the QueryBuilder run query button
+  try {
+    const { field, operator, value } = rule;
+
+    const fieldDataType = getFieldDataType(field, objFields);
+
+    // to support between operation
+    // between only for non-string values
+    let filterStartValue = null;
+    let filterEndValue = null;
+
+    // if operator === 'picklist'
+    // create a comma-seperated list for the SOQL IN clause
+    // picklist operator valid for string values only
+    let filterValue = null;
+    let filterValues = [];
+    if (fieldDataType === "picklist") {
+      const numValues = value.length;
+      value.forEach((el, index) => {
+        filterValues = filterValues + `'${el}'`;
+        if (index < numValues - 1) {
+          filterValues = filterValues + ", ";
+        }
+      });
+    } else if (operator === "between" || operator === "notBetween") {
+      filterStartValue = value[0];
+      filterEndValue = value[1];
+    } else {
+      filterValue = value;
+    }
+
+    switch (operator) {
+      case "equal":
+        if (
+          fieldDataType === "decimal" ||
+          fieldDataType === "currency" ||
+          fieldDataType === "double" ||
+          fieldDataType === "integer" ||
+          fieldDataType === "long" ||
+          fieldDataType === "boolean"
+        ) {
+          // non-string values are not quoted
+          return {
+            sql: `${field} = ${filterValue}`,
+          };
+        } else if (
+          fieldDataType === "string" ||
+          fieldDataType === "encryptedstring" ||
+          fieldDataType === "id"
+        ) {
+          // string values are quoted
+          return { sql: `${field} = '${filterValue}'` };
+        } else if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} = ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} = ${aDateLiteral}` };
+        } else if (fieldDataType === "picklist") {
+          // picklist input field is multi-select
+          // so implement using IN
+          return { sql: `${field} IN (${filterValues})` };
+        } else {
+          // treat other data types as string
+          // NEED TO REVIEW THIS EX: BLOBS, ETC.
+          return { sql: `${field} = '${filterValues}'` };
+        }
+      case "notequal":
+        // value could be a string or number
+        if (
+          fieldDataType === "decimal" ||
+          fieldDataType === "currency" ||
+          fieldDataType === "double" ||
+          fieldDataType === "integer" ||
+          fieldDataType === "long" ||
+          fieldDataType === "boolean"
+        ) {
+          return { sql: `${field} <> ${filterValue}` };
+        } else if (
+          fieldDataType === "string" ||
+          fieldDataType === "encryptedstring" ||
+          fieldDataType === "id"
+        ) {
+          // string values are quoted
+          return { sql: `${field} <> '${filterValue}'` };
+        } else if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} <> ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} <> ${aDateLiteral}` };
+        } else if (fieldDataType === "picklist") {
+          // picklist input field is multi-select
+          // so implement using IN
+          return {
+            sql: `NOT ${field} IN (${filterValues})`,
+          };
+        } else {
+          return { sql: `${field} <> '${filterValue}'` };
+        }
+      case "in":
+        // soql in clause needs comma-seperated list of values
+        // get the values
+
+        return { sql: `${field} IN (${filterValues})` };
+      case "notin":
+        // soql in clause needs comma-seperated list of values
+        // get the values
+
+        return { sql: `NOT ${field} IN (${filterValues})` };
+      case "contains":
+        // convert to LIKE
+        return { sql: `${field} LIKE '%${filterValue}%'` };
+      case "notcontains":
+        // convert to LIKE
+        return {
+          sql: `NOT ${field} LIKE '%${filterValue}%'`,
+        };
+      case "lessthanorequal":
+        // valid for numbers and dates
+        if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} <= ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} <= ${aDateLiteral}` };
+        } else {
+          return { sql: `${field} <= ${filterValue}` };
+        }
+      case "greaterorequal":
+        // valid for numbers and dates
+        if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} >= ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} >= ${aDateLiteral}` };
+        } else {
+          return { sql: `${field} >= ${filterValue}` };
+        }
+      case "lessthan":
+        // valid for numbers and dates
+        if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} < ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} < ${aDateLiteral}` };
+        } else {
+          return { sql: `${field} < ${filterValue}` };
+        }
+      case "greaterthan":
+        // valid for numbers and dates
+        if (fieldDataType === "date") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return { sql: `${field} > ${aDateLiteral}` };
+        } else if (fieldDataType === "datetime") {
+          const aDate = new Date(filterValue);
+          const aDateLiteral = JSON.stringify(aDate);
+          return {
+            sql: `${field} > ${aDateLiteral}`,
+            filterValue: [],
+          };
+        } else {
+          return { sql: `${field} > ${filterValue}` };
+        }
+      case "beginswith":
+        // valid for text
+        return { sql: `${field} LIKE '${filterValue}%'` };
+      case "notbeginswith":
+        // valid for text
+        return {
+          sql: `NOT ${field} LIKE '${filterValue}%'`,
+        };
+      case "endswith":
+        // valid for text
+        return { sql: `${field} LIKE '%${filterValue}'` };
+      case "notendswith":
+        // valid for text
+        return {
+          sql: `NOT ${field} LIKE '%${filterValue}'`,
+        };
+      case "between":
+        // for date and number fields
+        if (fieldDataType === "date") {
+          const startDate = new Date(filterStartValue);
+          const startDateLiteral = JSON.stringify(startDate);
+          const endDate = new Date(filterEndValue);
+          const endDateLiteral = JSON.stringify(endDate);
+          return {
+            sql: `${field} >= ${startDateLiteral} AND ${field} <= ${endDateLiteral}`,
+          };
+        } else if (fieldDataType === "datetime") {
+          const startDate = new Date(filterStartValue);
+          const startDateLiteral = JSON.stringify(startDate);
+          const endDate = new Date(filterEndValue);
+          const endDateLiteral = JSON.stringify(endDate);
+          return {
+            sql: `${field} >= ${startDateLiteral} AND ${field} <= ${endDateLiteral}`,
+          };
+        } else {
+          return {
+            sql: `${field} >= ${filterValue.start} AND ${field} <= ${filterValue.end}`,
+          };
+        }
+      case "notbetween": {
+        // for non-string values
+        if (fieldDataType === "date") {
+          const startDate = new Date(filterStartValue);
+          const startDateLiteral = JSON.stringify(startDate);
+          const endDate = new Date(filterEndValue);
+          const endDateLiteral = JSON.stringify(endDate);
+          return {
+            sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
+          };
+        } else if (fieldDataType === "datetime") {
+          const startDate = new Date(filterStartValue);
+          const startDateLiteral = JSON.stringify(startDate);
+          const endDate = new Date(filterEndValue);
+          const endDateLiteral = JSON.stringify(endDate);
+          return {
+            sql: `${field} < ${startDateLiteral} OR ${field} > ${endDateLiteral}`,
+          };
+        }
+        break;
+      }
+      case "isnull": {
+        return { sql: `${field} = null` };
+      }
+      case "isnotnull": {
+        return { sql: `${field} != null` };
+      }
+      default: {
+        // revisit this as we want to filter out queries with blobs, etc.
+        return { sql: `${field} = '${filterValue}'` };
+      }
+    }
+  } catch (error) {
+    return { status: "error", errorMessage: error.message };
+  }
+}
+
+function processGroup(ruleGroup, objFields, objName, result) {
+  const groupCondition = ruleGroup.condition;
+  const rules = ruleGroup.rules;
+  let queryStr = "";
+
+  const groupResult = [];
+
+  rules.forEach((rule) => {
+    if (rule.rules === undefined) {
+      const response = processRule(rule, objFields);
+      groupResult.push(response.sql);
+    } else {
+      const ruleObj = {
+        condition: rule.condition,
+        rules: rule.rules,
+      };
+      processGroup(ruleObj, objFields, objName, result);
+    }
+  });
+
+  if (groupResult.length > 1) {
+    queryStr = groupResult.join(` ${groupCondition.toUpperCase()} `);
+    queryStr = `${queryStr}`;
+  } else {
+    queryStr = groupResult[0];
+  }
+
+  result.push(`(${queryStr})`);
+}
+
+export async function getQuerySQL(query, objFields, objName) {
+  let result = [];
+
+  const outerCondition = query.condition;
+
+  const rules = query.rules;
+
+  rules.forEach((rule) => {
+    // a rule can be a group
+    if (rule.rules) {
+      const groupObj = {
+        condition: rule.condition,
+        rules: rule.rules,
+      };
+      processGroup(groupObj, objFields, objName, result);
+    } else {
+      const response = processRule(rule, objFields);
+      result.push(response.sql);
+    }
+  });
+
+  let queryStr = "";
+  if (result.length > 1) {
+    queryStr = result.join(` ${outerCondition.toUpperCase()} `);
+  } else {
+    queryStr = result[0];
+  }
+
+  console.log(queryStr);
+  return queryStr;
+}
+
 // template functions
 
 export function createSaveTemplateRecords(
@@ -1440,8 +1709,6 @@ export async function getDefaultTemplates(
   is_related,
   owner
 ) {
-  let templates = null;
-
   const url = "/postgres/knexSelect";
 
   // get all columns
@@ -1955,8 +2222,6 @@ export async function getObjectMetadata(sobject, userInfo, objectMetadata) {
       profileId: userInfo.profileId,
     };
 
-    let metadataRecords = [];
-
     try {
       let metadataResponse = await fetch(metadataUrl, {
         method: "post",
@@ -1975,8 +2240,6 @@ export async function getObjectMetadata(sobject, userInfo, objectMetadata) {
       if (result.status !== "ok") {
         throw new Error(metadataResponse.errorMessage);
       }
-
-      const objMetadata = result.records;
 
       return {
         status: "ok",

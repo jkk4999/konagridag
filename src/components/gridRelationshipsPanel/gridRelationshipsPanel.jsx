@@ -1,11 +1,5 @@
 // React
-import React, {
-  useState,
-  useMemo,
-  useRef,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 // redux
 import { addMetadata } from "../../features/objectMetadataSlice";
@@ -27,33 +21,15 @@ import * as gf from "../../views/gridView/gridFunctions";
 // MUI
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
-import { makeStyles } from "@mui/styles";
 import { Stack } from "@mui/material";
 
-const totalStyle = { paddingBottom: "15px" };
-
-// css rules in jss
-const useStyles = makeStyles((theme) => ({
-  gridStyle: {
-    display: "flex",
-    flexDirection: "column",
-    position: "absolute",
-    width: "100%",
-    height: "93vh",
-    backgroundColor: "#fff",
-    color: "black",
-    marginLeft: "15px",
-  },
-}));
-
-export default (props) => {
+export default function GridRelationshipsPanel(props) {
   // Snackbar
-  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
+  const { enqueueSnackbar } = useSnackbar();
 
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
-  const relationPreferences = useSelector((state) => state.relationPreferences);
 
   // local object references
   const relationshipGridRef = useRef(null);
@@ -61,7 +37,9 @@ export default (props) => {
   // local state
   const [colDefs, setColDefs] = useState([]);
   const [gridData, setGridData] = useState([]);
-  const selectedObject = useSelector((state) => state.selectedObject);
+  const selectedObject = useSelector(
+    (state) => state.toolbarState.selectedObject
+  );
 
   const dispatch = useDispatch();
 
@@ -107,6 +85,10 @@ export default (props) => {
           const newRel = {
             id: r,
             selected: false,
+            transpositionView: false,
+            ganttView: false,
+            kanbanView: false,
+            scheduleView: false,
           };
           relArray.push(newRel);
         });
@@ -162,9 +144,13 @@ export default (props) => {
           if (objPref) {
             objPref.relations.forEach((r) => {
               // find the relation in the relation grid
-              const rec = relArray.find((f) => f.id === r.obj);
+              const rec = relArray.find((f) => f.id === r.id);
               if (rec) {
                 rec.selected = true;
+                rec.transpositionView = r.transpositionView;
+                rec.ganttView = r.ganttView;
+                rec.kanbanView = r.kanbanView;
+                rec.scheduleView = r.scheduleView;
               }
             });
           }
@@ -194,11 +180,64 @@ export default (props) => {
           field: "selected",
           filter: true,
           headerName: "Selected",
+          onChange: () => {},
           sortable: true,
           width: 125,
         };
 
         gridCols.push(selectedCol);
+
+        const transpositionViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "transpositionView",
+          filter: true,
+          headerName: "Transposition",
+          onChange: () => {},
+          sortable: true,
+          width: 150,
+        };
+
+        gridCols.push(transpositionViewCol);
+
+        const ganttViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "ganttView",
+          filter: true,
+          headerName: "Gantt",
+          onChange: () => {},
+          sortable: true,
+          width: 125,
+        };
+
+        gridCols.push(ganttViewCol);
+
+        const kanbanViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "kanbanView",
+          filter: true,
+          headerName: "Kanban",
+          onChange: () => {},
+          sortable: true,
+          width: 125,
+        };
+
+        gridCols.push(kanbanViewCol);
+
+        const scheduleViewCol = {
+          cellRenderer: AgGridCheckbox,
+          editable: true,
+          field: "scheduleView",
+          filter: true,
+          headerName: "Schedule",
+          onChange: () => {},
+          sortable: true,
+          width: 125,
+        };
+
+        gridCols.push(scheduleViewCol);
 
         // supply column definitions to grid
         setColDefs(gridCols);
@@ -217,14 +256,14 @@ export default (props) => {
           TransitionComponent: Slide,
         };
 
-        const key = enqueueSnackbar(error.message, snackOptions);
+        enqueueSnackbar(error.message, snackOptions);
       }
     };
 
     getRelationships();
 
     // get the relationships
-  }, [selectedObject]);
+  }, [selectedObject, enqueueSnackbar, userInfo]);
 
   return (
     <Stack style={{ textAlign: "center", height: "100%" }}>
@@ -258,10 +297,7 @@ export default (props) => {
             width: 150,
           }}
           onClick={async (e) => {
-            const visibleColumns = [];
             const selectedRelations = [];
-
-            let rec = null;
 
             // get selected relations
             relationshipGridRef.current.api.forEachNode((n) => {
@@ -307,16 +343,9 @@ export default (props) => {
                       TransitionComponent: Slide,
                     };
 
-                    const key = enqueueSnackbar(error.message, snackOptions);
+                    enqueueSnackbar(error.message, snackOptions);
                   });
               }
-            });
-
-            const objRelationships = [];
-            selectedRelations.forEach((r) => {
-              objRelationships.push({
-                "obj": r.id,
-              });
             });
 
             let values = null;
@@ -331,12 +360,11 @@ export default (props) => {
 
               // no preferences found
               if (relResult.records.length === 0) {
-                const objRelations = [];
-
                 preferences = [
                   {
                     object: selectedObject.id,
-                    relations: objRelationships,
+                    // relations: objRelationships,
+                    relations: selectedRelations,
                   },
                 ];
               } else {
@@ -352,12 +380,14 @@ export default (props) => {
                 if (prefIndex !== -1) {
                   preferences[prefIndex] = {
                     object: selectedObject.id,
-                    relations: objRelationships,
+                    // relations: objRelationships,
+                    relations: selectedRelations,
                   };
                 } else {
                   preferences.push({
                     object: selectedObject.id,
-                    relations: objRelationships,
+                    // relations: objRelationships,
+                    relations: selectedRelations,
                   });
 
                   preferences.sort((a, b) => a.object < b.object);
@@ -415,7 +445,7 @@ export default (props) => {
                 TransitionComponent: Slide,
               };
 
-              const key = enqueueSnackbar(error.message, snackOptions);
+              enqueueSnackbar(error.message, snackOptions);
             }
           }}
           variant='contained'
@@ -425,4 +455,4 @@ export default (props) => {
       </Box>
     </Stack>
   );
-};
+}

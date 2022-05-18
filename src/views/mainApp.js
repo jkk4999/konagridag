@@ -1,36 +1,27 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import React from "react";
+import { useDispatch } from "react-redux";
 
 // AgGrid
 import { LicenseManager } from "ag-grid-enterprise";
 
 // global
 import { setUserInfo } from "../features/userInfoSlice";
-import { setSelectedApp } from "../features/selectedAppSlice";
-import { setSelectedAppTitle } from "../features/selectedAppTitleSlice";
-import { setIsLoggedIn } from "../features/loginSlice";
 
 // React Query
 import { useQuery } from "react-query";
 
 // MUI
-import { makeStyles } from "@mui/styles";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 
 // Snackbar
 import { useSnackbar } from "notistack";
 import { Slide } from "@mui/material";
 
-import {
-  BrowserRouter,
-  Link as RouteLink,
-  Routes,
-  Route,
-} from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 // views
-import GridView from "../views/gridView/gridView";
+// import GridView from "../views/gridView/gridView";
+import GridHeader from "../components/gridHeader/gridHeader";
 import TemplateManagerView from "../views/templateManagerView";
 import QueryManagerView from "../views/queryManagerView";
 import KanbanView from "../views/kanbanView";
@@ -38,11 +29,6 @@ import GanttView from "../views/ganttView";
 import SchedulerView from "../views/schedulerView";
 import AppManagerView from "../views/appManagerView";
 import DemoDataView from "../views/demoDataView";
-
-// Redux
-import { store } from "../store/store";
-
-import { BiCalculator } from "react-icons/bi";
 
 export default function MainApp() {
   // AgGrid license manager
@@ -59,13 +45,6 @@ export default function MainApp() {
   };
 
   const notistackRef = React.createRef();
-
-  // global state
-  const sidebarSize = useSelector((state) => state.sidebarSize);
-  const selectedAppTitle = useSelector((state) => state.selectedAppTitle);
-  const userInfo = useSelector((state) => state.userInfo);
-  const isLoggedIn = useSelector((state) => state.isLoggedIn);
-  const queryOptions = useSelector((state) => state.queryOptions);
 
   const { isLoading, isError, error, data, isFetching } = useQuery(
     "loginData",
@@ -148,7 +127,7 @@ export default function MainApp() {
   return (
     <Box p='1%' BoxDir='column' overflow='scroll' w='100%' h='96%'>
       <Routes>
-        <Route path='/grid' exact element={<GridView />} />
+        <Route path='/grid' exact element={<GridHeader />} />
         <Route path='/templates' element={<TemplateManagerView />} />
         <Route path='/queries' element={<QueryManagerView />} />
         <Route path='/kanban' element={<KanbanView />} />

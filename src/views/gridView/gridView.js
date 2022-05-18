@@ -41,6 +41,7 @@ import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
 import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
 import ObjectPreferencesPanel from "../../components/objectPreferencesPanel/objectPreferencesPanel";
 import AgGridAutocomplete from "../../components/aggridAutoComplete";
+import AutoCompleteEditor from "../../components/autoCompleteEditor";
 
 // Mui
 import { makeStyles } from "@mui/styles";
@@ -129,7 +130,8 @@ let newRowTracking = [];
 export default function GridView() {
   // custom Autocomplete cell editor
   const [components] = useState({
-    agGridAutoComplete: AgGridAutocomplete,
+    // agGridAutoComplete: AgGridAutocomplete,
+    autoCompleteEditor: AutoCompleteEditor,
   });
 
   // Snackbar
@@ -1251,8 +1253,6 @@ export default function GridView() {
   function getFieldDataType(fieldName, objFields) {
     let fieldDataType = null;
 
-    // const objMetadata = metadataMap.get(objName);
-    // const objFields = objMetadata.fields;
     const objField = objFields.find((f) => f.name === fieldName);
     fieldDataType = objField.dataType;
     return fieldDataType;

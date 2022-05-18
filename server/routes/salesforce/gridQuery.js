@@ -199,6 +199,7 @@ module.exports = async function (fastify, options, next) {
       // get the parent object fields
       let relatedObjMetadata = metadataMap.get(referenceTo);
       if (!relatedObjMetadata) {
+        console.log(`Server getting metadata for ${referenceTo}`);
         let metadataResult = await getObjectMetadata(
           conn,
           referenceTo,
@@ -212,6 +213,9 @@ module.exports = async function (fastify, options, next) {
           throw new Error(metadataResult.errorMessage);
         } else {
           relatedObjMetadata = metadataResult.records;
+
+          // store server metadata
+          metadataMap.set(referenceTo, relatedObjMetadata);
         }
       }
 
@@ -266,9 +270,6 @@ module.exports = async function (fastify, options, next) {
     try {
       // get the org metadata using describeGlobal
       let response = await conn.sobject(objName).describe();
-
-      // store result in server metadata
-      metadataMap.set(objName, response);
 
       // const payload = {
       //   objName: objName,
@@ -651,6 +652,7 @@ module.exports = async function (fastify, options, next) {
       let objMetadata = metadataMap.get(objName);
 
       if (objMetadata === undefined) {
+        console.log(`Server getting object metadata for ${objName}`);
         let result = await getObjectMetadata(
           conn,
           objName,
@@ -665,6 +667,14 @@ module.exports = async function (fastify, options, next) {
         }
 
         objMetadata = result.records;
+
+        // store server metadata
+        metadataMap.set(objName, objMetadata);
+
+        // get or create the objectMetadata
+        // objMetadata = objectMetadata.find(
+        //   (f) => f.objName === selectedObject.id
+        // );
       }
 
       let objMetadataFields = objMetadata.fields;
@@ -694,7 +704,7 @@ module.exports = async function (fastify, options, next) {
         // add fields to select clause
         for (let i = 0; i < referenceFieldsArray.length; i++) {
           const refField = referenceFieldsArray[i];
-          console.log(`Adding ${refField}`);
+          // console.log(`Adding ${refField}`);
           fieldsArray.push(refField);
         }
       }

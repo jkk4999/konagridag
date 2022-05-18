@@ -3,12 +3,12 @@ import { createSlice } from "@reduxjs/toolkit";
 /* metadata schema
   metadata: [
     {
-    name: "Account",
-    data: {}
+      objName: "Account",
+      metadata: {}
     },
     {
-    name: "Contact",
-    data: {}
+      objName: "Contact",
+      metadata: {}
     },
   ]
   };

@@ -383,4 +383,4 @@ function SaveTemplateDialog(props) {
   );
 }
 
-export default SaveTemplateDialog;
+export default React.memo(SaveTemplateDialog);

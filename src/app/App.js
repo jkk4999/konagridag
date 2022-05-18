@@ -1,13 +1,7 @@
 import "./App.css";
 
 // React Query
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  QueryClient,
-  QueryClientProvider,
-} from "react-query";
+import { QueryClient, QueryClientProvider } from "react-query";
 import { ReactQueryDevtools } from "react-query/devtools";
 
 // AgGrid styles
@@ -22,10 +16,7 @@ import MainApp from "../views/mainApp";
 import Sidebar from "../components/sidebar";
 import AppBar from "../components/appBar";
 
-import PropTypes from "prop-types";
-
 // Mui
-import { Box } from "@mui/material/Box";
 import { createTheme } from "@mui/material/styles";
 import { ThemeProvider } from "styled-components";
 import { makeStyles } from "@mui/styles";
