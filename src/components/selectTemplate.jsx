@@ -64,31 +64,32 @@ class SelectTemplate extends React.Component {
   }
 }
 
-function mapStateToProps(state) {
-  const selectedObject = state.toolbarState.selectedObject;
-  const queryColumns = state.toolbarState.queryColumns;
-  const gridData = state.gridData;
-  const objectMetadata = state.objectMetadata;
-  return {
-    selectedObject,
-    queryColumns,
-    gridData,
-    objectMetadata,
-  };
-}
+// function mapStateToProps(state) {
+//   const selectedObject = state.toolbarState.selectedObject;
+//   const queryColumns = state.toolbarState.queryColumns;
+//   const gridData = state.gridData;
+//   const objectMetadata = state.objectMetadata;
+//   return {
+//     selectedObject,
+//     queryColumns,
+//     gridData,
+//     objectMetadata,
+//   };
+// }
 
-function mapDispatchToProps(dispatch) {
-  return {
-    setQueryRule: (rule) => {
-      // dispatch(setQueryRule(rule));
+// function mapDispatchToProps(dispatch) {
+//   return {
+//     setQueryRule: (rule) => {
+//       // dispatch(setQueryRule(rule));
 
-      // make copy of toolbar state
-      const newToolbarState = { ...this.state.toolbarState };
-      newToolbarState.queryRule = rule;
+//       // make copy of toolbar state
+//       const newToolbarState = { ...this.state.toolbarState };
+//       newToolbarState.queryRule = rule;
 
-      dispatch(setToolbarState(newToolbarState));
-    },
-  };
-}
+//       dispatch(setToolbarState(newToolbarState));
+//     },
+//   };
+// }
 
-export default connect(mapStateToProps, mapDispatchToProps)(SelectTemplate);
+// export default connect(mapStateToProps, mapDispatchToProps)(SelectTemplate);
+export default SelectTemplate;

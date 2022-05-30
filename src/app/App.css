@@ -51,3 +51,7 @@
   font-family: Roboto !important;
   font-size: "20px";
 }
+
+.ag-body-horizontal-scroll.ag-scrollbar-invisible {
+  pointer-events: all !important;
+}

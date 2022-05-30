@@ -9,6 +9,7 @@ import React, {
 
 // Redux
 import { useSelector, useDispatch } from "react-redux";
+import { addMetadata } from "../../features/objectMetadataSlice";
 
 // save template dialog
 import SaveTemplateDialog from "../../components/saveTemplateDialog/saveTemplateDialog";
@@ -20,14 +21,14 @@ import _ from "lodash";
 import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
 
 // grid functions
-import * as gf from "../../views/gridView/gridFunctions";
+import * as ghf from "../../views/gridView/gridFunctions";
 
 // AgGrid
 import { AgGridReact } from "ag-grid-react";
 import "ag-grid-enterprise";
 import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
-import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import CheckboxRenderer from "../aggrid/cellRenderers/checkboxRenderer";
 
 // Mui
 import { makeStyles } from "@mui/styles";
@@ -69,7 +70,18 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function ChildGridView(props) {
-  const { masterObject, childObject, selectedGridRow } = props;
+  const {
+    masterObject,
+    childObject,
+    masterGridRef,
+    relationPreferences,
+    gridPreferences,
+    selectedObject,
+    selectedGridRow,
+    objTemplates,
+  } = props;
+
+  const dispatch = useDispatch();
 
   // used to update toast message
   const toastId = useRef(null);
@@ -91,9 +103,6 @@ function ChildGridView(props) {
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
-  const relationPreferences = useSelector(
-    (state) => state.toolbarState.relationPreferences
-  );
 
   // local state// previous state values
   const [rowData, setRowData] = useState([]);
@@ -227,7 +236,7 @@ function ChildGridView(props) {
     try {
       // get the selected template and determine if the current user is the owner
       if (selectedTemplate) {
-        const templateResult = await gf.getTemplate(
+        const templateResult = await ghf.getTemplate(
           selectedTemplate.id,
           userInfo
         );
@@ -262,7 +271,7 @@ function ChildGridView(props) {
       });
 
       // create the template records
-      const templateRecs = gf.createSaveTemplateRecords(
+      const templateRecs = ghf.createSaveTemplateRecords(
         childObject,
         visibleColumns,
         objectMetadata,
@@ -300,7 +309,7 @@ function ChildGridView(props) {
         {
           field: "split",
           headerName: "Split",
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: CheckboxRenderer,
           editable: true,
           filterParams: {
             excelMode: "mac",
@@ -311,7 +320,7 @@ function ChildGridView(props) {
         {
           field: "group",
           headerName: "Group",
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: CheckboxRenderer,
           editable: true,
           filterParams: {
             excelMode: "mac",
@@ -348,7 +357,7 @@ function ChildGridView(props) {
         {
           field: "filter",
           headerName: "Filter",
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: CheckboxRenderer,
           editable: true,
           filterParams: {
             excelMode: "mac",
@@ -408,7 +417,7 @@ function ChildGridView(props) {
       let optionsList = ["Grid"];
 
       // get relation preferences for the selected object
-      const relationPref = relationPreferences.find(
+      const relationPref = relationPreferences.data.preferences.find(
         (f) => f.object === masterObject.id
       );
 
@@ -445,7 +454,7 @@ function ChildGridView(props) {
     };
 
     getViewOptions();
-  }, [relationPreferences, viewOptions, childObject, masterObject]);
+  }, [relationPreferences.data, viewOptions, childObject, masterObject]);
 
   useEffect(() => {
     /*  
@@ -460,116 +469,93 @@ function ChildGridView(props) {
 
       console.log(`configureGrid useEffect running for ${childObject}`);
 
+      // check for metadata
+      let objMetadata = objectMetadata.find((f) => f.objName === childObject);
+
+      if (objMetadata === undefined) {
+        // get object metadata
+        console.log(`Getting object metadata for ${childObject}`);
+        const metadataResult = await ghf.getObjectMetadata(
+          childObject,
+          userInfo,
+          objectMetadata
+        );
+
+        if (metadataResult.status !== "ok") {
+          throw new Error(`Error retrieving metadata for ${childObject}`);
+        }
+
+        // store object metadata in global state
+        objMetadata = {
+          objName: childObject,
+          metadata: metadataResult.records,
+        };
+
+        dispatch(addMetadata(objMetadata));
+      }
+
       setLoadingIndicator(true);
 
       try {
-        // get template records
-        const templateResult = await gf.getTemplateRecords(
-          childObject,
-          userInfo
-        );
-
-        if (templateResult.status === "error") {
-          throw new Error(`Error getting template options for ${childObject}}`);
-        }
-
-        const templateData = templateResult.records;
-
-        // create the template options list
-        const tmpOptions = [];
-        templateData.forEach((d) => {
-          const newOpt = {
-            id: d.id,
-            label: d.template_name,
-          };
-          tmpOptions.push(newOpt);
+        // load template options for this object
+        let tmpOptions = [];
+        objTemplates.data.forEach((t) => {
+          if (t.object === childObject && t.is_related === true) {
+            const newOpt = {
+              id: t.id,
+              value: t.template_name,
+            };
+            tmpOptions.push(newOpt);
+          }
         });
 
         setTemplateOptions(tmpOptions);
 
         // get user preferences
-        const prefResult = await gf.getGridPreferences(
-          childObject,
-          true, // is_related
-          userInfo // userInfo
+        // get template and query preferences for selectedObject
+        const gridPref = gridPreferences.data.find(
+          (p) => p.object === childObject && p.is_related === true
         );
 
-        if (prefResult.status === "error") {
-          throw new Error(
-            `Error retrieving grid preferences for ${childObject}`
-          );
-        }
-
-        const prefData = prefResult.records;
-
-        if (prefData.length > 1) {
-          throw new Error(
-            `Found more than 1 user preference for ${childObject}`
-          );
-        }
-
-        const userPref =
-          prefResult.records.length > 0 ? prefResult.records[0] : null;
-
-        if (templateData.length === 0) {
-          // no templates defined for this object - create default grid columns
-          let defaultGridCols = await gf.createDefaultGridColumns(
-            childObject,
-            objectMetadata
+        if (gridPref) {
+          // find the template option with this Id
+          const tmpOption = tmpOptions.find(
+            (o) => o.id === gridPref.templateid
           );
 
-          setColDefs(defaultGridCols);
-          prevColDefs.current = defaultGridCols;
+          // use this template
+          setSelectedTemplate(tmpOption);
 
-          setTemplateOptions([]);
-          setSelectedTemplate(null);
           console.log(
-            `No templates found for ${childObject}.  Creating default grid columns.`
+            `Found user template preference for ${childObject}.  Setting selectedTemplate state to ${tmpOption.value}`
           );
         }
 
-        if (templateData.length > 0) {
-          // check for template user preference
-          if (userPref) {
-            // find the template option with this Id
-            const tmpOption = tmpOptions.find(
-              (o) => o.id === userPref.templateid
-            );
+        if (!gridPref) {
+          // check for default template preference
+          let defaultTemplate = objTemplates.data.find(
+            (t) => t.object === childObject && t.default === true
+          );
 
-            // use this template
-            setSelectedTemplate(tmpOption);
-
+          if (defaultTemplate) {
+            const defaultPref = {
+              id: defaultTemplate.id,
+              value: defaultTemplate.template_name,
+            };
+            setSelectedTemplate(defaultPref);
             console.log(
-              `Found template user preference for ${tmpOption.label}`
+              `Found default template for ${childObject}.  Setting selectedTemplate state to ${defaultPref.value}`
             );
-          }
-
-          if (!userPref) {
-            // check for default template preference
-            let defaultPref = templateData.forEach((t) => t.default === true);
-            if (defaultPref !== undefined) {
-              defaultPref = {
-                id: defaultPref.id,
-                label: defaultPref.template_name,
-              };
-              setSelectedTemplate(defaultPref);
-              console.log(
-                `Found template default preference for ${defaultPref.label}`
-              );
-            }
-
-            // no defaults found
-            if (defaultPref === undefined) {
-              // use the first template
+          } else {
+            // use the first template
+            if (tmpOptions.length > 0) {
               setSelectedTemplate(tmpOptions[0]);
               console.log(
-                `No user or default template preferences found for ${childObject}`
+                `No default template found for ${childObject}.  Setting selectedTemplate to ${tmpOptions[0].value}`
               );
             }
           }
         }
-
-        setLoadingIndicator(false);
       } catch (error) {
         setLoadingIndicator(false);
 
@@ -608,18 +594,43 @@ function ChildGridView(props) {
 
       prevSelectedTemplate.current = selectedTemplate;
 
+      // check for metadata
+      const objMetadata = objectMetadata.find((f) => f.objName === childObject);
+
+      if (objMetadata === undefined) {
+        // get object metadata
+        console.log(`Getting object metadata for ${childObject}`);
+        const metadataResult = await ghf.getObjectMetadata(
+          childObject,
+          userInfo,
+          objectMetadata
+        );
+
+        if (metadataResult.status !== "ok") {
+          throw new Error(`Error retrieving metadata for ${childObject}`);
+        }
+
+        // store object metadata in global state
+        objMetadata = {
+          objName: childObject,
+          metadata: metadataResult.records,
+        };
+
+        dispatch(addMetadata(objMetadata));
+      }
+
       if (selectedTemplate) {
-        const result = await gf.getTemplateFields(selectedTemplate);
+        const result = await ghf.getTemplateFields(selectedTemplate);
 
         if (result.status === "error") {
           throw new Error("Error retrieving temmplate fields");
         }
 
         // create the grid columns
-        let gridCols = await gf.createGridColumns(
+        let gridCols = await ghf.createGridColumns(
           childObject,
           result.records,
-          objectMetadata,
+          objMetadata,
           gridRef
         );
 
@@ -654,7 +665,7 @@ function ChildGridView(props) {
         whereClause = `${masterObj}Id = '${selectedGridRow.Id}'`;
       }
 
-      const response = await gf.runQuery(childObject, whereClause);
+      const response = await ghf.runQuery(childObject, whereClause);
 
       if (response.status === "error") {
         throw new Error(`Error retrieving related records for ${childObject}`);

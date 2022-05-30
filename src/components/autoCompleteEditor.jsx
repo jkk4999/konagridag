@@ -2,8 +2,9 @@ import React, { useState, forwardRef, useImperativeHandle } from "react";
 import TextField from "@mui/material/TextField";
 import AutoComplete from "@mui/material/Autocomplete";
 
-// Snackbar
-import { useSnackbar } from "notistack";
+// Toast
+import { toast } from "react-toastify";
+
 import { Slide } from "@mui/material";
 import { Api } from "@mui/icons-material";
 
@@ -16,9 +17,6 @@ export default forwardRef((props, ref) => {
 
   const relation = props.relation;
   const [options, setOptions] = useState([]);
-
-  // Snackbar
-  const { enqueueSnackbar } = useSnackbar();
 
   function onChangeHandler(e, value) {
     setValue(value);
@@ -90,17 +88,7 @@ export default forwardRef((props, ref) => {
       console.log(error.message);
 
       // notify user of error
-      const snackOptions = {
-        variant: "error",
-        autoHideDuration: 5000,
-        anchorOrigin: {
-          vertical: "top",
-          horizontal: "right",
-        },
-        TransitionComponent: Slide,
-      };
-
-      enqueueSnackbar("Error retrieving relation query", snackOptions);
+      toast.error(error.message, { autoClose: 5000 });
     }
   };
 

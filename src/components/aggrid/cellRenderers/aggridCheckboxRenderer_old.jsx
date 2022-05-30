@@ -16,6 +16,7 @@ export default class extends Component {
         type='checkbox'
         onClick={this.checkedHandler}
         checked={this.props.value}
+        defaultChecked={false}
       />
     );
   }

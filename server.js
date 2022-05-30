@@ -33,6 +33,8 @@ const fastify = require("fastify")({
   bodyLimit: 104857600, // 100MB
 });
 
+fastify.register(require("fastify-server-timing"));
+
 // Swagger API documentation plugin
 fastify.register(require("fastify-swagger"), {
   exposeRoute: true,

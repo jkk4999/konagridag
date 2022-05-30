@@ -1,5 +1,7 @@
 import React from "react";
 
+import ReferenceFilter from "../aggrid/filterComponents/referenceFilter";
+
 // MUI
 import Box from "@mui/material/Box";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
@@ -70,11 +72,10 @@ export async function createDefaultGridColumns(
   return cols;
 }
 
-export async function createGridColumns(
+export function createGridColumns(
   selectedObject,
   templateFields,
   objectMetadata,
-  gridRef,
   changedCellIds
 ) {
   // create grid columns for all fields found in metadata for the given types
@@ -125,7 +126,7 @@ export async function createGridColumns(
       }
 
       // create the column
-      const col = await createGridField(field, fieldMetadata, changedCellIds);
+      const col = createGridField(field, fieldMetadata, changedCellIds);
 
       if (col.field !== null) {
         cols.push(col);
@@ -255,11 +256,43 @@ export async function createGridColumns(
   }
 }
 
-export async function createGridField(
-  metadataField,
-  fieldMetadata,
-  changedCellIds
-) {
+const referenceFilterFormatter = (params) => {
+  const field = params.colDef.field;
+  const rec = params.data;
+
+  if (!rec) {
+    return params.value;
+  }
+
+  let relation = null;
+  if (field.slice(-2) === "Id") {
+    relation = field.slice(0, -2);
+  }
+
+  if (field.slice(-3) === "__c") {
+    relation = field.slice(0, -3);
+  }
+
+  if (rec.hasOwnProperty(relation)) {
+    if (field === "Case") {
+      return rec[relation].CaseNumber;
+    }
+
+    if (field === "Contract") {
+      return rec[relation].ContractNumber;
+    }
+
+    if (rec[relation].Name) {
+      return rec[relation].Name;
+    } else {
+      return params.value;
+    }
+  } else {
+    return params.value;
+  }
+};
+
+export function createGridField(metadataField, fieldMetadata, changedCellIds) {
   // const selectedObject = useSelector((state) => state.selectedObject);
 
   const sfdcDataType = metadataField.dataType;
@@ -304,7 +337,9 @@ export async function createGridField(
           // Check if id in lookup aray.
           "go-green": ({ node }) => changedCellIds.current.includes(node.id),
         },
+
         checkboxSelection: true,
+        cellRenderer: "checkboxRenderer",
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
@@ -613,19 +648,22 @@ export async function createGridField(
           // Check if id in lookup aray.
           "go-green": ({ node }) => changedCellIds.current.includes(node.id),
         },
-        cellEditor: "autoCompleteEditor",
-        cellEditorPopup: true,
-        cellEditorParams: {
-          relation: relation,
-        },
+        // cellEditor: "autoCompleteEditor",
+        // cellEditorPopup: true,
+        // cellEditorParams: {
+        //   relation: relation,
+        // },
         editable: metadataField.calculated ? false : true,
         enableRowGroup: true,
         field: metadataField.name,
-        headerName: fieldLabel,
-        // filter: "agTextColumnFilter",
+        filter: "agSetColumnFilter",
         filterParams: {
-          buttons: ["reset", "apply"],
+          // buttons: ["reset", "apply"],
+          filter: "agSetColumnFilter",
+          excelMode: "mac",
+          valueFormatter: referenceFilterFormatter,
         },
+        headerName: fieldLabel,
         minWidth: 150,
         resizable: true,
         // convert relation id to relation name
@@ -724,7 +762,7 @@ export async function createGridField(
 
 // queryBuilder functions
 
-export async function createQueryBuilderColumns(objMetadata) {
+export function createQueryBuilderColumns(objMetadata) {
   const objFields = objMetadata.fields;
 
   const cols = [];
@@ -732,7 +770,7 @@ export async function createQueryBuilderColumns(objMetadata) {
   // need to use for..of so await will work
   for (const field of objFields) {
     // create the column
-    const col = await createQueryColumn(field);
+    const col = createQueryColumn(field);
 
     if (col.field !== null) {
       cols.push(col);
@@ -746,7 +784,7 @@ export async function createQueryBuilderColumns(objMetadata) {
   return cols;
 }
 
-export async function createQueryColumn(metadataField) {
+export function createQueryColumn(metadataField) {
   // QueryBuilder Column Types:  number || string || date || boolean
 
   /* example column defs
@@ -1620,7 +1658,7 @@ export async function getQuerySQL(query, objFields, objName) {
     queryStr = result[0];
   }
 
-  console.log(queryStr);
+  // console.log(queryStr);
   return queryStr;
 }
 

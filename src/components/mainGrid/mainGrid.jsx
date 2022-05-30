@@ -6,10 +6,8 @@ import React, {
   useCallback,
 } from "react";
 
-import { useSelector, useDispatch } from "react-redux";
-
 // Redux
-import { setToolbarState } from "../../features/toolbarStateSlice";
+import { useSelector, useDispatch } from "react-redux";
 
 import PubSub from "pubsub-js";
 
@@ -18,7 +16,7 @@ import { AgGridReact } from "ag-grid-react";
 import "ag-grid-enterprise";
 import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
-import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import CheckboxRenderer from "../aggrid/cellRenderers/checkboxRenderer";
 import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
 import ObjectPreferencesPanel from "../../components/objectPreferencesPanel/objectPreferencesPanel";
 import AgGridAutocomplete from "../../components/aggridAutoComplete";
@@ -26,21 +24,9 @@ import AutoCompleteEditor from "../../components/autoCompleteEditor";
 
 // Mui
 import { makeStyles } from "@mui/styles";
-import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
-import { IconButton } from "@mui/material";
-import Button from "@mui/material/Button";
-import { Checkbox } from "@mui/material";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogTitle from "@mui/material/DialogTitle";
 
 // React Spinner
-import LoadingOverlay from "react-loading-overlay-ts";
-import DotLoader from "react-spinners/DotLoader";
-
 import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
 
 import * as ghf from "../../components/gridHeader/gridHeaderFuncs";
@@ -49,7 +35,7 @@ import * as ghf from "../../components/gridHeader/gridHeaderFuncs";
 import { toast } from "react-toastify";
 
 // Lodash
-import _, { isEqual } from "lodash";
+import _ from "lodash";
 
 // subviews
 import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
@@ -73,7 +59,22 @@ let changedRowTracking = [];
 let newRowTracking = [];
 
 const MainGrid = React.forwardRef((props, ref) => {
-  const { gridRef, queryBuilderRef, objectOptions } = props;
+  const {
+    queryBuilderRef,
+    objectOptions,
+    objPreferences,
+    relationPreferences,
+    gridPreferences,
+    selectedGridView,
+    selectedObject,
+    selectedTemplate,
+    selectedQuery,
+    templateFields,
+    objTemplates,
+    objQueries,
+    startTime,
+    endTime,
+  } = props;
 
   // used to update toast message
   const toastId = useRef(null);
@@ -82,34 +83,15 @@ const MainGrid = React.forwardRef((props, ref) => {
 
   // redux global state
   const dispatch = useDispatch();
-  const toolbarState = useSelector((state) => state.toolbarState);
+  // const toolbarState = useSelector((state) => state.toolbarState);
 
-  // true when user makes changes to selected query
-  // const queryChanged = useSelector((state) => state.toolbarState.queryChanged);
-
-  const loadingIndicator = useSelector((state) => state.loadingIndicator);
   const objectMetadata = useSelector((state) => state.objectMetadata);
-  const relationPreferences = useSelector(
-    (state) => state.toolbarState.relationPreferences
-  );
-  const selectedObject = useSelector(
-    (state) => state.toolbarState.selectedObject
-  );
-  const selectedQuery = useSelector(
-    (state) => state.toolbarState.selectedQuery
-  );
-  const selectedTemplate = useSelector(
-    (state) => state.toolbarState.selectedTemplate
-  );
-  const selectedGridView = useSelector(
-    (state) => state.toolbarState.selectedGridView
-  );
+
   const userInfo = useSelector((state) => state.userInfo);
 
   // AgGrid local state
-  // const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
-  const [rowData, setRowData] = useState([]);
+  const [columnDefs, setColumnDefs] = useState(null);
+  const [rowData, setRowData] = useState(null);
   const selectedGridRow = useRef(null);
 
   // Create a lookup array.
@@ -118,6 +100,7 @@ const MainGrid = React.forwardRef((props, ref) => {
 
   // local state
   const prevColumnDefs = useRef(null);
+  const prevSelectedObject = useRef(null);
   const prevSelectedTemplate = useRef(null);
   const prevSelectedQuery = useRef(null);
 
@@ -129,111 +112,92 @@ const MainGrid = React.forwardRef((props, ref) => {
 
   const classes = useStyles();
 
-  async function getQueryData() {
-    try {
-      setLoadingIndicator(true);
+  const getQueryData = useCallback(() => {
+    const getData = async () => {
+      try {
+        console.log("Main grid - getting query data");
 
-      const query = queryBuilderRef.current.getRules();
+        // dispatch(setLoadingIndicator(true));
 
-      if (query.rules.length === 0) {
-        return;
-      }
+        const queryRule = queryBuilderRef.current.getRules();
 
-      // get object metadata
-      const metadataResult = await ghf.getObjectMetadata(
-        selectedObject.id,
-        userInfo,
-        objectMetadata
-      );
-      const objMetadata = metadataResult.records;
+        // if (queryRule.rules.length === 0) {
+        //   console.log("Main grid exiting - query rules are 0");
+        //   // dispatch(setLoadingIndicator(false));
+        //   return;
+        // }
 
-      let objMetadataFields = objMetadata.metadata.fields;
+        // // get query from database
+        // const query = objQueries.data.find((q) => q.id === selectedQuery.id);
 
-      // get the query
-      const sqlResult = await ghf.getQuerySQL(
-        query,
-        objMetadataFields,
-        selectedObject.id
-      );
+        // const queryRule = query.query_rules;
 
-      // run query
-      const executeQueryResult = await ghf.runQuery(
-        selectedObject.id,
-        sqlResult
-      );
-
-      if (executeQueryResult.status !== "ok") {
-        throw new Error(`Error executing query for ${selectedQuery.id}`);
-      }
-
-      let queryData = executeQueryResult.records[0];
-
-      // update grid row state
-      setRowData(queryData);
-
-      setLoadingIndicator(false);
-    } catch (error) {
-      console.log(error.message);
-
-      setLoadingIndicator(false);
-
-      // notify user of error
-      toast.error("Error executing query", { autoClose: 5000 });
-    }
-  }
-
-  // PubSub functions
-  const clearDataHandler = (msg, data) => {
-    switch (msg) {
-      case "ClearData":
-        // const newToolbarState = { ...toolbarState };
-        // newToolbarState.gridData = [];
-        // dispatch(setToolbarState(newToolbarState));
-        setRowData([]);
-        break;
-      default:
-        break;
-    }
-  };
-
-  const createDefaultGridColumnsHandler = async (msg, data) => {
-    switch (msg) {
-      case "CreateDefaultGridColumns": {
-        // create default grid columns
-        let defaultGridCols = await ghf.createDefaultGridColumns(
+        // get object metadata
+        const metadataResult = await ghf.getObjectMetadata(
           selectedObject.id,
-          objectMetadata,
-          changedCellIds
+          userInfo,
+          objectMetadata
+        );
+        const objMetadata = metadataResult.records;
+
+        let objMetadataFields = objMetadata.metadata.fields;
+
+        // get the query
+        const sqlResult = await ghf.getQuerySQL(
+          queryRule,
+          objMetadataFields,
+          selectedObject.id
         );
 
-        setColumnDefs(defaultGridCols);
-        prevColumnDefs.current = defaultGridCols;
-        break;
+        // run query
+        const executeQueryResult = await ghf.runQuery(
+          selectedObject.id,
+          sqlResult
+        );
+
+        if (executeQueryResult.status !== "ok") {
+          throw new Error(
+            `MainGrid - Error executing query for ${selectedQuery.id}`
+          );
+        }
+
+        let queryData = executeQueryResult.records[0];
+
+        // update grid row state
+        setRowData([...queryData]);
+
+        console.log("Main grid data loaded");
+
+        // endTime.current = performance.now();
+
+        // console.log(
+        //   `Main grid data created in ${
+        //     endTime.current - startTime.current
+        //   } milliseconds`
+        // );
+
+        // startTime.current = performance.now();
+
+        // dispatch(setLoadingIndicator(false));
+      } catch (error) {
+        console.log(error.message);
+
+        // dispatch(setLoadingIndicator(false));
+
+        // notify user of error
+        toast.error("Error executing query", { autoClose: 5000 });
       }
-      default:
-        break;
-    }
-  };
+    };
 
-  const addRecordHandler = (msg, data) => {
-    switch (msg) {
-      case "AddRow":
-        console.log(data);
-        break;
-      default:
-        break;
-    }
-  };
-
-  const deleteRecordHandler = (msg, data) => {
-    switch (msg) {
-      case "DeleteRow":
-        console.log(data);
-        break;
-      default:
-        break;
-    }
-  };
+    getData();
+  }, [
+    objectMetadata,
+    queryBuilderRef,
+    selectedObject,
+    selectedQuery,
+    userInfo,
+    dispatch,
+  ]);
 
   const saveHandler = (msg, data) => {
     switch (msg) {
@@ -255,26 +219,6 @@ const MainGrid = React.forwardRef((props, ref) => {
     }
   };
 
-  const runQueryHandler = (msg, data) => {
-    // when user modifies the selected query
-    // and hits the Query button to execute
-    switch (msg) {
-      case "RunQuery":
-        getQueryData();
-        break;
-      default:
-        break;
-    }
-  };
-
-  // clear data event
-  useEffect(() => {
-    var token = PubSub.subscribe("ClearData", clearDataHandler);
-    return () => {
-      PubSub.unsubscribe(token);
-    };
-  }, []);
-
   // selected template changed
   useEffect(() => {
     // when selected template changes, create the grid columns
@@ -290,44 +234,61 @@ const MainGrid = React.forwardRef((props, ref) => {
         return;
       }
 
+      // dispatch(setLoadingIndicator(true));
+
       prevSelectedTemplate.current = { ...selectedTemplate };
 
       console.log(
-        `Running mainGrid selected template changed useEffect for template ${selectedTemplate.label}`
+        `MainGrid UseEffect SelectedTemplateChanged - to template ${selectedTemplate.value}`
       );
 
       try {
-        setLoadingIndicator(true);
-
         // get the template fields for selected template
-        const templateFieldResult = await ghf.getTemplateFields(
-          selectedTemplate
-        );
+        const tempFields = [];
+        templateFields.data.forEach((f) => {
+          if (f.templateid === selectedTemplate.id) {
+            tempFields.push(f);
+          }
+        });
 
-        if (templateFieldResult.status === "error") {
+        if (tempFields.length === 0) {
           throw new Error(
-            `gridView-useEffect() - ${templateFieldResult.errorMessage}`
+            `MainGrid UseEffect SelectedTemplateChanged - No template fields found for template ${selectedTemplate.id}`
           );
         }
 
-        const templateFieldData = templateFieldResult.records;
-
         // create the grid columns
-        const gridCols = await ghf.createGridColumns(
+        const gridCols = ghf.createGridColumns(
           selectedObject.id,
-          templateFieldData,
+          tempFields,
           objectMetadata,
-          gridRef,
           changedCellIds
         );
 
-        setColumnDefs(gridCols);
+        setColumnDefs([...gridCols]);
 
-        setLoadingIndicator(false);
+        console.log(
+          "MainGrid UseEffect SelectedTemplateChanged - grid columns created"
+        );
+
+        // endTime.current = performance.now();
+
+        // console.log(
+        //   `Main grid templates created in ${
+        //     endTime.current - startTime.current
+        //   } milliseconds`
+        // );
+
+        // startTime.current = performance.now();
+
+        // dispatch(setLoadingIndicator(false));
       } catch (error) {
-        setLoadingIndicator(false);
+        // dispatch(setLoadingIndicator(false));
+
         // log error and notify user
-        console.log(`useEffectTemplateChanged() - ${error.message}`);
+        console.log(
+          `MainGrid UseEffect SelectedTemplateChanged - ${error.message}`
+        );
 
         // notify user of error
         toast.error(error.message, { autoClose: 5000 });
@@ -335,21 +296,35 @@ const MainGrid = React.forwardRef((props, ref) => {
     };
 
     tmpChanged();
-  }, [selectedObject, selectedTemplate, gridRef, objectMetadata]);
+  }, [selectedObject, selectedTemplate, ref, objectMetadata]);
 
   // query changed
   useEffect(() => {
     const queryChanged = async () => {
       if (!selectedQuery) {
+        setRowData([]);
+        console.log(
+          "MainGrid useEffect queryChanged - returning selected query is null"
+        );
         return;
       }
 
-      if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
+      // need to check if the selected query is for the selected object
+      // main grid could render while the previous query for a different object is loaded
+      // this happens when we have a asyncronous operation like getting metadata
+      // find the query
+      const q = objQueries.data.find((f) => f.id === selectedQuery.id);
+      if (q.object !== selectedObject.id) {
         return;
       }
+
+      // if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
+      //   console.log("MainGrid useEffect queryChanged - query has not changed");
+      //   return;
+      // }
 
       console.log(
-        `Running mainGrid queryChanged useEffect for query ${selectedQuery.label}`
+        `MainGrid UseEffect queryChanged - query is ${selectedQuery.value}`
       );
 
       prevSelectedQuery.current = selectedQuery;
@@ -360,32 +335,134 @@ const MainGrid = React.forwardRef((props, ref) => {
     queryChanged();
   }, [selectedQuery, getQueryData]);
 
-  // ClearData subscription
+  // RunQuery - subscribe to runQuery toolbar event
   useEffect(() => {
-    var clearDataToken = PubSub.subscribe("ClearData", clearDataHandler);
-    return () => {
-      PubSub.unsubscribe(clearDataToken);
+    const runQueryHandler = (msg, data) => {
+      switch (msg) {
+        case "RunQuery":
+          getQueryData();
+          break;
+        default:
+          break;
+      }
     };
-  }, [clearDataHandler]);
-
-  // RunQuery subscription
-  useEffect(() => {
     var runQueryToken = PubSub.subscribe("RunQuery", runQueryHandler);
+
     return () => {
       PubSub.unsubscribe(runQueryToken);
     };
-  }, [runQueryHandler]);
+  }, []);
 
-  // CreateDefaultGridColumns subscription
+  // AddRecord - subscribe to toolbar event
   useEffect(() => {
+    const addRecordHandler = (msg, data) => {
+      // create a new grid record when user clicks toolbar button
+      switch (msg) {
+        case "AddRecord":
+          // addGridRecord();
+          break;
+        default:
+          break;
+      }
+    };
+    var addRecordToken = PubSub.subscribe("AddRecord", addRecordHandler);
+
+    return () => {
+      PubSub.unsubscribe(addRecordToken);
+    };
+  }, []);
+
+  // ClearData - subscribe to toolbar event
+  useEffect(() => {
+    // PubSub function
+    const clearDataHandler = (msg, data) => {
+      switch (msg) {
+        case "ClearData":
+          setRowData([]);
+          break;
+        default:
+          break;
+      }
+    };
+
+    var clearDataToken = PubSub.subscribe("ClearData", clearDataHandler);
+
+    return () => {
+      PubSub.unsubscribe(clearDataToken);
+    };
+  }, []);
+
+  // CreateDefaultGridColumns - subscribe to toolbar event
+  useEffect(() => {
+    const createDefaultGridColumnsHandler = async (msg, data) => {
+      switch (msg) {
+        case "CreateDefaultGridColumns": {
+          // create default grid columns
+          let defaultGridCols = await ghf.createDefaultGridColumns(
+            selectedObject.id,
+            objectMetadata,
+            changedCellIds
+          );
+
+          setColumnDefs(defaultGridCols);
+          prevColumnDefs.current = defaultGridCols;
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
     var createDefaultGridColumnsToken = PubSub.subscribe(
       "CreateDefaultGridColumns",
       createDefaultGridColumnsHandler
     );
+
     return () => {
       PubSub.unsubscribe(createDefaultGridColumnsToken);
     };
-  }, [createDefaultGridColumnsHandler]);
+  }, [objectMetadata, selectedObject]);
+
+  // DeleteRecord subscription - subscribe to toolbar event
+  useEffect(() => {
+    const deleteRecordHandler = (msg, data) => {
+      // delete the selected grid records when user clicks toolbar button
+      switch (msg) {
+        case "DeleteRecords":
+          // deleteGridRecords();
+          break;
+        default:
+          break;
+      }
+    };
+    var deleteRecordToken = PubSub.subscribe(
+      "DeleteRecords",
+      deleteRecordHandler
+    );
+
+    return () => {
+      PubSub.unsubscribe(deleteRecordToken);
+    };
+  }, []);
+
+  // SaveRecords - subscribe to toolbar event
+  useEffect(() => {
+    const saveRecordsHandler = (msg, data) => {
+      // save changes to database
+      switch (msg) {
+        case "SaveRecords":
+          getQueryData();
+          break;
+        default:
+          break;
+      }
+    };
+    var saveRecordsToken = PubSub.subscribe("SaveRecords", saveRecordsHandler);
+
+    return () => {
+      PubSub.unsubscribe(saveRecordsToken);
+    };
+  }, [getQueryData]);
 
   // AgGrid functions
   const autoGroupColumnDef = useMemo(() => {
@@ -424,12 +501,6 @@ const MainGrid = React.forwardRef((props, ref) => {
     },
   };
 
-  // custom Autocomplete cell editor
-  const [components] = useState({
-    // agGridAutoComplete: AgGridAutocomplete,
-    autoCompleteEditor: AutoCompleteEditor,
-  });
-
   const defaultColDef = useMemo(() => {
     return {
       editable: true,
@@ -449,10 +520,12 @@ const MainGrid = React.forwardRef((props, ref) => {
   const detailCellRendererParams = useMemo(() => {
     return {
       masterObject: selectedObject,
-      masterGridRef: gridRef.current,
+      masterGridRef: ref,
       relationPreferences: relationPreferences,
+      objTemplates: objTemplates,
+      gridPreferences: gridPreferences,
     };
-  });
+  }, [ref, relationPreferences, selectedObject, objTemplates]);
 
   const doesExternalFilterPass = useCallback((node) => {
     return node.data.error;
@@ -470,7 +543,7 @@ const MainGrid = React.forwardRef((props, ref) => {
     }
     // Also, change the data
     node.setData(data);
-  });
+  }, []);
 
   function gridRowClicked(params) {
     selectedGridRow.current = params.data;
@@ -481,6 +554,12 @@ const MainGrid = React.forwardRef((props, ref) => {
     // changing the rowData bound property.
     const api = params.api;
     const columnApi = params.columnApi;
+
+    endTime.current = new Date();
+    var duration =
+      (endTime.current.getTime() - startTime.current.getTime()) / 1000;
+
+    console.log("Main grid rendering took " + duration + " seconds.");
   }
 
   function gridRowSelected(params) {
@@ -504,12 +583,12 @@ const MainGrid = React.forwardRef((props, ref) => {
   function onFirstDataRendered(params) {
     const allColumnIds = [];
     const skipHeader = false;
-    gridRef.current.columnApi.getAllColumns().forEach((column) => {
+    ref.current.columnApi.getAllColumns().forEach((column) => {
       if (column.colDef.field !== "error") {
         allColumnIds.push(column.getId());
       }
     });
-    gridRef.current.columnApi.autoSizeColumns(allColumnIds, skipHeader);
+    ref.current.columnApi.autoSizeColumns(allColumnIds, skipHeader);
   }
 
   function onGridReady(e) {
@@ -551,6 +630,9 @@ const MainGrid = React.forwardRef((props, ref) => {
           toolPanel: ObjectPreferencesPanel,
           toolPanelParams: {
             orgObjects: objectOptions,
+            objPreferences: objPreferences,
+            selectedObject: selectedObject,
+            objectOptions: objectOptions,
           },
         },
         // relationships panel
@@ -563,11 +645,24 @@ const MainGrid = React.forwardRef((props, ref) => {
           toolPanel: GridRelationshipsPanel,
           toolPanelParams: {
             selectedObject: selectedObject,
+            relationPreferences: relationPreferences,
+            objectOptions: objectOptions,
           },
         },
       ],
     };
   }, [selectedObject, objectOptions]);
+
+  // register AgGrid components
+  const components = {
+    // agGridAutoComplete: AgGridAutocomplete,
+    autoCompleteEditor: AutoCompleteEditor,
+    checkboxRenderer: CheckboxRenderer,
+  };
+
+  if (!columnDefs || !rowData) {
+    return <></>;
+  }
 
   return (
     <Box
@@ -608,7 +703,7 @@ const MainGrid = React.forwardRef((props, ref) => {
             onRowClicked={gridRowClicked}
             onRowSelected={gridRowSelected}
             onSelectionChanged={gridSelectionChanged}
-            ref={gridRef}
+            ref={ref}
             rowBuffer={100}
             rowData={rowData}
             rowGroupPanelShow={"always"}

@@ -65,8 +65,8 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnmount: false,
       refetchOnReconnect: false,
-      retry: false,
-      staleTime: Infinity,
+      retry: true,
+      staleTime: 5000,
     },
   },
 });
@@ -76,7 +76,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
-        <ReactQueryDevtools initialIsOpen={true} />
+        <ReactQueryDevtools initialIsOpen={false} />
         <BrowserRouter>
           <div>
             <CssBaseline />

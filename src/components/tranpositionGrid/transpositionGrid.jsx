@@ -35,7 +35,7 @@ import { AgGridReact } from "ag-grid-react";
 import "ag-grid-enterprise";
 import "ag-grid-community/dist/styles/ag-grid.css";
 import "ag-grid-community/dist/styles/ag-theme-material.css";
-import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import CheckboxRenderer from "../aggrid/cellRenderers/checkboxRenderer";
 import GridRelationshipsPanel from "../../components/gridRelationshipsPanel/gridRelationshipsPanel";
 import ObjectPreferencesPanel from "../../components/objectPreferencesPanel/objectPreferencesPanel";
 import AgGridAutocomplete from "../../components/aggridAutoComplete";
@@ -240,6 +240,7 @@ function TranspositionGrid(props) {
   // custom Autocomplete cell editor
   const [components] = useState({
     autoCompleteEditor: AutoCompleteEditor,
+    checkboxRenderer: CheckboxRenderer,
   });
 
   // Snackbar

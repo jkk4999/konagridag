@@ -10,7 +10,7 @@ import { useSelector, useDispatch } from "react-redux";
 
 // AgGrid
 import { AgGridReact } from "ag-grid-react";
-import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import CheckboxRenderer from "../aggrid/cellRenderers/checkboxRenderer";
 
 // Toast
 import { toast } from "react-toastify";
@@ -23,6 +23,9 @@ import Box from "@mui/material/Box";
 import { Stack } from "@mui/material";
 
 export default function GridRelationshipsPanel(props) {
+  const selectedObject = props.selectedObject;
+  const relationPreferences = props.relationPreferences;
+
   // used to update toast message
   const toastId = useRef(null);
 
@@ -36,13 +39,10 @@ export default function GridRelationshipsPanel(props) {
   // local state
   const [colDefs, setColDefs] = useState([]);
   const [gridData, setGridData] = useState([]);
-  const selectedObject = useSelector(
-    (state) => state.toolbarState.selectedObject
-  );
 
   const dispatch = useDispatch();
 
-  // display relationships grid
+  // create grid cols and data
   useEffect(() => {
     if (!selectedObject) {
       return;
@@ -51,6 +51,19 @@ export default function GridRelationshipsPanel(props) {
     const getRelationships = async () => {
       try {
         // get the child relationships for the selected object
+        // const objMetadata = objectMetadata.find(
+        //   (f) => f.objName === selectedObject.id
+        // );
+
+        // if (!objMetadata) {
+        //   toast.error(
+        //     `mainGrid() - Metadata not found for ${selectedObject.id}`
+        //   );
+        //   return;
+        // }
+
+        // const childRelationships = objMetadata.metadata.childRelationships;
+
         const url = "/salesforce/childRelationships";
 
         const payload = {
@@ -75,12 +88,12 @@ export default function GridRelationshipsPanel(props) {
           throw new Error("Error getting grid relationships");
         }
 
-        const relationships = result.records;
+        const childRelationships = result.records;
 
         // create a record for each relationship
         const relArray = [];
 
-        relationships.forEach((r) => {
+        childRelationships.forEach((r) => {
           const newRel = {
             id: r,
             selected: false,
@@ -92,67 +105,25 @@ export default function GridRelationshipsPanel(props) {
           relArray.push(newRel);
         });
 
-        // get user relationship preferences
-        const preferencesUrl = "/postgres/knexSelect";
+        const prefResult = relationPreferences.data;
 
-        // get all columns
-        let columns = null;
+        const allPrefs = prefResult.preferences; // array of json
 
-        // get the templates from the database
-        const values = {
-          username: userInfo.userEmail,
-        };
+        // get the relation preferences for the selected object
+        const objPref = allPrefs.find((f) => f.object === selectedObject.id);
 
-        const prefPayload = {
-          table: "user_relation_prefs",
-          columns: columns,
-          values: values,
-          rowIds: [],
-          idField: null,
-        };
-
-        const prefResponse = await fetch(preferencesUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(prefPayload),
-        });
-
-        if (!prefResponse.ok) {
-          throw new Error(
-            `Network error - Error getting user relation preferences`
-          );
-        }
-
-        const prefResult = await prefResponse.json();
-
-        if (prefResult.status !== "ok") {
-          throw new Error("Error getting user relation preferences");
-        }
-
-        if (prefResult.records.length === 1) {
-          // always returns a single record
-          const prefRec = prefResult.records[0];
-
-          const allPrefs = prefRec.preferences; // array of json
-
-          // get the relation preferences for the selected object
-          const objPref = allPrefs.find((f) => f.object === selectedObject.id);
-
-          if (objPref) {
-            objPref.relations.forEach((r) => {
-              // find the relation in the relation grid
-              const rec = relArray.find((f) => f.id === r.id);
-              if (rec) {
-                rec.selected = true;
-                rec.transpositionView = r.transpositionView;
-                rec.ganttView = r.ganttView;
-                rec.kanbanView = r.kanbanView;
-                rec.scheduleView = r.scheduleView;
-              }
-            });
-          }
+        if (objPref) {
+          objPref.relations.forEach((r) => {
+            // find the relation in the relation grid
+            const rec = relArray.find((f) => f.id === r.id);
+            if (rec) {
+              rec.selected = true;
+              rec.transpositionView = r.transpositionView;
+              rec.ganttView = r.ganttView;
+              rec.kanbanView = r.kanbanView;
+              rec.scheduleView = r.scheduleView;
+            }
+          });
         }
 
         // supply data to the grid
@@ -174,12 +145,11 @@ export default function GridRelationshipsPanel(props) {
         gridCols.push(nameCol);
 
         const selectedCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "selected",
           filter: true,
           headerName: "Selected",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -187,12 +157,11 @@ export default function GridRelationshipsPanel(props) {
         gridCols.push(selectedCol);
 
         const transpositionViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "transpositionView",
           filter: true,
           headerName: "Transposition",
-          onChange: () => {},
           sortable: true,
           width: 150,
         };
@@ -200,12 +169,11 @@ export default function GridRelationshipsPanel(props) {
         gridCols.push(transpositionViewCol);
 
         const ganttViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "ganttView",
           filter: true,
           headerName: "Gantt",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -213,12 +181,11 @@ export default function GridRelationshipsPanel(props) {
         gridCols.push(ganttViewCol);
 
         const kanbanViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "kanbanView",
           filter: true,
           headerName: "Kanban",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -226,12 +193,11 @@ export default function GridRelationshipsPanel(props) {
         gridCols.push(kanbanViewCol);
 
         const scheduleViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "scheduleView",
           filter: true,
           headerName: "Schedule",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -254,6 +220,11 @@ export default function GridRelationshipsPanel(props) {
     // get the relationships
   }, [selectedObject, userInfo]);
 
+  // register AgGrid components
+  const components = {
+    checkboxRenderer: CheckboxRenderer,
+  };
+
   return (
     <Stack style={{ textAlign: "center", height: "100%" }}>
       <Box
@@ -269,6 +240,7 @@ export default function GridRelationshipsPanel(props) {
           animateRows={true}
           columnDefs={colDefs}
           enableColResize='false'
+          components={components}
           ref={relationshipGridRef}
           rowData={gridData}
         ></AgGridReact>

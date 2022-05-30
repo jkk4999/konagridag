@@ -16,7 +16,7 @@ import { useSelector, useDispatch } from "react-redux";
 
 // AgGrid
 import { AgGridReact } from "ag-grid-react";
-import AgGridCheckbox from "../../components/aggridCheckboxRenderer";
+import CheckboxRenderer from "../aggrid/cellRenderers/checkboxRenderer";
 
 // Toast
 import { toast } from "react-toastify";
@@ -53,9 +53,9 @@ export default (props) => {
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
   const toolbarState = useSelector((state) => state.toolbarState);
-  const objectPreferences = toolbarState.objectPreferences;
-  const selectedObject = toolbarState.selectedObject;
-  const objectOptions = toolbarState.objectOptions;
+  const objPreferences = props.objPreferences;
+  const selectedObject = props.selectedObject;
+  const objectOptions = props.objectOptions;
 
   // local object references
   const objectPreferencesGridRef = useRef(null);
@@ -70,18 +70,18 @@ export default (props) => {
   useEffect(() => {
     const getObjectPreferences = async () => {
       try {
-        if (!objectOptions || objectOptions.length === 0) {
+        if (!objectOptions || objectOptions.current.length === 0) {
           return;
         }
 
-        if (objectPreferences.length > 0) {
+        if (objPreferences.data.length === 0) {
           return;
         }
 
         // create a grid record for each org object
         const objArray = [];
 
-        objectOptions.forEach((r) => {
+        objectOptions.current.forEach((r) => {
           const newObj = {
             id: r.id,
             selected: false,
@@ -93,57 +93,8 @@ export default (props) => {
           objArray.push(newObj);
         });
 
-        // get user object preferences
-        const preferencesUrl = "/postgres/knexSelect";
-
-        // get all columns
-        let columns = null;
-
-        // get the object preferences from the database
-        const values = {
-          username: userInfo.userEmail,
-        };
-
-        const prefPayload = {
-          table: "user_object_prefs",
-          columns: columns,
-          values: values,
-          rowIds: [],
-          idField: null,
-        };
-
-        const prefResponse = await fetch(preferencesUrl, {
-          method: "post",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(prefPayload),
-        });
-
-        if (!prefResponse.ok) {
-          throw new Error(
-            `Network error - Error getting user object preferences`
-          );
-        }
-
-        const prefResult = await prefResponse.json();
-
-        if (prefResult.status !== "ok") {
-          throw new Error("Error getting user object preferences");
-        }
-
-        if (prefResult.records.length === 0) {
-          // no object preferences found
-          return;
-        }
-
-        if (prefResult.records.length > 1) {
-          // application error
-          throw new Error("Error retrieving org object preferences");
-        }
-
         // always returns a single record
-        const prefRec = prefResult.records[0];
+        const prefRec = objPreferences.data[0];
 
         const allObjectPrefs = prefRec.preferences; // array of json
 
@@ -178,12 +129,11 @@ export default (props) => {
         gridCols.push(nameCol);
 
         const selectedCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "selected",
           filter: true,
           headerName: "Selected",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -191,12 +141,11 @@ export default (props) => {
         gridCols.push(selectedCol);
 
         const transpositionViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "transpositionView",
           filter: true,
           headerName: "Transposition",
-          onChange: () => {},
           sortable: true,
           width: 150,
         };
@@ -204,12 +153,11 @@ export default (props) => {
         gridCols.push(transpositionViewCol);
 
         const ganttViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "ganttView",
           filter: true,
           headerName: "Gantt",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -217,12 +165,11 @@ export default (props) => {
         gridCols.push(ganttViewCol);
 
         const kanbanViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "kanbanView",
           filter: true,
           headerName: "Kanban",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -230,12 +177,11 @@ export default (props) => {
         gridCols.push(kanbanViewCol);
 
         const scheduleViewCol = {
-          cellRenderer: AgGridCheckbox,
+          cellRenderer: "checkboxRenderer",
           editable: true,
           field: "scheduleView",
           filter: true,
           headerName: "Schedule",
-          onChange: () => {},
           sortable: true,
           width: 125,
         };
@@ -254,7 +200,12 @@ export default (props) => {
     };
 
     getObjectPreferences();
-  }, [selectedObject]);
+  }, [selectedObject, objectOptions, objPreferences, userInfo]);
+
+  // register AgGrid components
+  const components = {
+    checkboxRenderer: CheckboxRenderer,
+  };
 
   return (
     <Stack style={{ textAlign: "center", height: "100%" }}>
@@ -271,6 +222,7 @@ export default (props) => {
           animateRows={true}
           columnDefs={colDefs}
           enableColResize='false'
+          components={components}
           ref={objectPreferencesGridRef}
           rowData={gridData}
         ></AgGridReact>

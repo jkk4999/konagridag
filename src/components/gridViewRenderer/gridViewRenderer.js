@@ -18,10 +18,25 @@ import TranspositionGrid from "../../components/tranpositionGrid/transpositionGr
 function GridViewRenderer(props) {
   // props
   const {
-    selectedGridView,
+    gridPreferences,
     mainGridRef,
-    transpositionGridRef,
+    objectOptions,
+    objPreferences,
+    objQueries,
+    objTemplates,
     queryBuilderRef,
+    relationPreferences,
+    selectedGridView,
+    selectedObject,
+    selectedQuery,
+    selectedTemplate,
+    templateFields,
+    transpositionGridRef,
+    startTime,
+    endTime,
+    prevSelectedObject,
+    prevSelectedTemplate,
+    prevSelectedQuery,
   } = props;
 
   const prevGridView = useRef(null);
@@ -31,22 +46,65 @@ function GridViewRenderer(props) {
   //   (state) => state.toolbarState.selectedGridView
   // );
 
+  if (!selectedObject || !selectedGridView) {
+    return;
+  }
+
+  // if (selectedGridView === prevGridView.current) {
+  //   return;
+  // }
+
+  // prevGridView.current = selectedGridView;
+
+  if (
+    !objPreferences.isFetched ||
+    !gridPreferences.isFetched ||
+    !objQueries.isFetched ||
+    !objTemplates.isFetched ||
+    !relationPreferences.isFetched ||
+    !templateFields.isFetched ||
+    !selectedObject ||
+    !selectedGridView
+  ) {
+    return;
+  }
+
+  // if (!_.isEqual(selectedObject, prevSelectedObject.current)) {
+  //   // user has changed the selectedObject
+  //   // just return until the other use effects have run
+  //   console.log(`Grid view renderer returning`);
+  //   return;
+  // }
+
   console.log("GridViewRenderer executing");
 
-  if (!selectedGridView) {
-    return;
-  }
+  endTime.current = new Date();
+  var duration =
+    (endTime.current.getTime() - startTime.current.getTime()) / 1000;
 
-  if (selectedGridView === prevGridView.current) {
-    return;
-  }
+  console.log("Pre grid rendering took " + duration + " seconds.");
 
-  prevGridView.current = selectedGridView;
+  startTime.current = new Date();
 
   switch (selectedGridView) {
     case "Grid": {
       return (
-        <MainGrid gridRef={mainGridRef} queryBuilderRef={queryBuilderRef} />
+        <MainGrid
+          ref={mainGridRef}
+          queryBuilderRef={queryBuilderRef}
+          objectOptions={objectOptions}
+          objPreferences={objPreferences}
+          gridPreferences={gridPreferences}
+          relationPreferences={relationPreferences}
+          selectedObject={selectedObject}
+          selectedTemplate={selectedTemplate}
+          selectedQuery={selectedQuery}
+          templateFields={templateFields}
+          objTemplates={objTemplates}
+          objQueries={objQueries}
+          startTime={startTime}
+          endTime={endTime}
+        />
       );
     }
     case "Transposition": {

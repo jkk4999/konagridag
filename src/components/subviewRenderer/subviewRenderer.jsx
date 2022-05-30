@@ -20,17 +20,19 @@ function DetailCellRenderer(props) {
 
   const masterObject = props.masterObject;
   const masterGridRef = props.masterGridRef;
-  // const relationPreferences = props.relationPreferences;
+  const relationPreferences = props.relationPreferences;
+  const gridPreferences = props.gridPreferences;
   const selectedGridRow = props.data;
+  const selectedGridView = props.selectedGridView;
+  const selectedObject = props.selectedObject;
+  const selectedTemplate = props.selectedTemplate;
+  const selectedQuery = props.selectedQuery;
+  const objTemplates = props.objTemplates;
 
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = React.useState("");
 
   const prevRelationPrefs = useRef(null);
-
-  const relationPreferences = useSelector(
-    (state) => state.toolbarState.relationPreferences
-  );
 
   const handleChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -42,7 +44,7 @@ function DetailCellRenderer(props) {
       return;
     }
 
-    if (_.isEqual(relationPreferences, prevRelationPrefs.current)) {
+    if (_.isEqual(relationPreferences.data, prevRelationPrefs.current)) {
       return;
     }
 
@@ -52,7 +54,7 @@ function DetailCellRenderer(props) {
 
     const tabArray = [];
 
-    const objectPreferences = relationPreferences.find(
+    const objectPreferences = relationPreferences.data.preferences.find(
       (p) => p.object === masterObject.id
     );
 
@@ -100,7 +102,14 @@ function DetailCellRenderer(props) {
                   masterObject={masterObject}
                   childObject={tab.value}
                   masterGridRef={masterGridRef}
+                  relationPreferences={relationPreferences}
+                  gridPreferences={gridPreferences}
                   selectedGridRow={selectedGridRow}
+                  selectedGridView={selectedGridView}
+                  selectedObject={selectedObject}
+                  selectedTemplate={selectedTemplate}
+                  selectedQuery={selectedQuery}
+                  objTemplates={objTemplates}
                 />
                 {/* <div>
                   <h1>{tab.value} child grid</h1>
