@@ -10,7 +10,7 @@ import Tooltip from "@mui/material/Tooltip";
 
 // grid column functions
 
-export async function createDefaultGridColumns(
+export function createDefaultGridColumns(
   selectedObject,
   objectMetadata,
   changedCellIds
@@ -58,7 +58,68 @@ export async function createDefaultGridColumns(
     }
 
     // create the column
-    const col = await createGridField(field, fieldMetadata, changedCellIds);
+    const col = createGridField(field, fieldMetadata, changedCellIds);
+
+    if (col.field !== null) {
+      cols.push(col);
+    }
+  }
+
+  // set the first column to use agGroupCellRenderer (to show subview)
+  const firstCol = cols[0];
+  firstCol.cellRenderer = "agGroupCellRenderer";
+
+  return cols;
+}
+
+export function createDefaultGridColumns2(
+  selectedObject,
+  objMetadata,
+  changedCellIds
+) {
+  // create grid columns for all fields found in metadata for the given types
+
+  // get the object fields metadata
+  const objFields = objMetadata.data.fields;
+
+  const cols = [];
+
+  // create a column for all metadata fields
+  // used for hide/show column function
+  for (const field of objFields) {
+    const columnName = field.name;
+
+    // get the metadata for this field
+    const fieldMetadata = objFields.find((f) => f.name === columnName);
+
+    // only create columns for these datatypes
+    const types = [
+      "boolean",
+      "combobox",
+      "currency",
+      "date",
+      "datetime",
+      "decimal",
+      "double",
+      "email",
+      "encryptedstring",
+      "id",
+      "int",
+      "long",
+      "percent",
+      "phone",
+      "picklist",
+      "reference",
+      "string",
+      "url",
+    ];
+
+    if (!types.includes(field.dataType)) {
+      continue;
+    }
+
+    // create the column
+    const col = createGridField(field, fieldMetadata, changedCellIds);
 
     if (col.field !== null) {
       cols.push(col);
@@ -84,6 +145,189 @@ export function createGridColumns(
   // get the object fields metadata
   const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
   const objFields = objMetadata.metadata.fields;
+
+  if (templateFields !== null && templateFields.length > 0) {
+    const cols = [];
+
+    // sort template fields by column order
+    templateFields.sort((a, b) => a.column_order - b.column_order);
+
+    // create a column for all metadata fields
+    // used for hide/show column function
+    for (const field of objFields) {
+      const columnName = field.name;
+
+      // get the metadata for this field
+      const fieldMetadata = objFields.find((f) => f.name === columnName);
+
+      // only create columns for these datatypes
+      const types = [
+        "boolean",
+        "combobox",
+        "currency",
+        "date",
+        "datetime",
+        "decimal",
+        "double",
+        "email",
+        "encryptedstring",
+        "id",
+        "int",
+        "long",
+        "percent",
+        "phone",
+        "picklist",
+        "reference",
+        "string",
+        "url",
+      ];
+
+      if (!types.includes(field.dataType)) {
+        continue;
+      }
+
+      // create the column
+      const col = createGridField(field, fieldMetadata, changedCellIds);
+
+      if (col.field !== null) {
+        cols.push(col);
+      }
+    }
+
+    // hide columns not in template
+    cols.forEach((c) => {
+      // skip error column
+      if (c.field === "error") {
+        return;
+      }
+
+      const templateField = templateFields.find((f) => f.name === c.field);
+
+      if (templateField) {
+        c.hide = false;
+
+        // assign the template id (must be a string for column api)
+        c.colId = templateField.id.toString();
+      } else {
+        c.hide = true;
+      }
+    });
+
+    // order grid columns by template_field order
+    const colOrder = [];
+
+    templateFields.forEach((f) => {
+      const gridCol = cols.find((c) => c.field === f.name);
+      colOrder.push(gridCol);
+    });
+
+    // add a error column in the first position
+    // we will use a cell renderer to show a red dot when save errors occur
+    // column is hidden by default, and shown when we need to display errors
+    const errorCol = {
+      field: "error",
+      headerName: "",
+      hide: false,
+      width: 40,
+      cellRenderer: (params) => {
+        // put the value in bold
+        // return 'Value is **' + params.value + '**';
+
+        // const imageElement = document.createElement("img");
+        // imageElement.src = ErrorOutlineIcon;
+        // return imageElement;
+        if (params.value) {
+          return (
+            <Box
+              sx={{
+                alignItems: "left",
+                justifyContent: "left",
+                ml: -2,
+              }}
+            >
+              <Tooltip title={params.value}>
+                <IconButton size='small' color='error'>
+                  <ErrorOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          );
+        } else {
+          return <div />;
+        }
+      },
+    };
+    colOrder.unshift(errorCol);
+
+    // set the first column to use agGroupCellRenderer (to show subview)
+    const firstCol = colOrder[1];
+    firstCol.cellRenderer = "agGroupCellRenderer";
+
+    // apply sorting, grouping and aggregrations
+    // hide group columns
+    colOrder.forEach((c, index) => {
+      if (c.field === "error") {
+        return;
+      }
+      // get template field definition
+      const templateField = templateFields.find((t) => t.name === c.field);
+
+      // apply sort
+      if (templateField.sort !== "") {
+        c.sort = templateField.sort;
+        c.sortIndex = index;
+      }
+
+      // apply column groups
+      if (templateField.group) {
+        c.rowGroup = true;
+        c.hide = true;
+      } else {
+        c.rowGroup = false;
+        c.hide = false;
+      }
+
+      if (
+        templateField.aggregration !== null &&
+        templateField.aggregation !== ""
+      ) {
+        c.aggFunc = templateField.aggregation;
+        c.allowedAggFuncs = ["sum", "min", "max", "count", "avg"];
+        c.enableValue = true;
+      }
+
+      // apply column splits
+      if (templateField.split) {
+        c.pinned = true;
+      } else {
+        c.pinned = false;
+      }
+    });
+
+    // add the rest of the grid columns, order doesn't matter
+    cols.forEach((c) => {
+      if (colOrder.find((o) => o.field === c.field) === undefined) {
+        c.rowGroup = false;
+
+        colOrder.push(c);
+      }
+    });
+
+    return colOrder;
+  }
+}
+
+export function createGridColumns2(
+  selectedObject,
+  templateFields,
+  objMetadata,
+  changedCellIds
+) {
+  // create grid columns for all fields found in metadata for the given types
+  // then hide the columns not found in the template
+
+  // get the object fields metadata
+  const objFields = objMetadata.data.fields;
 
   if (templateFields !== null && templateFields.length > 0) {
     const cols = [];
@@ -689,7 +933,7 @@ export function createGridField(metadataField, fieldMetadata, changedCellIds) {
               return rec[relation].ContractNumber;
             }
 
-            if (rec[relation].Name) {
+            if (rec[relation] && rec[relation].Name) {
               return rec[relation].Name;
             } else {
               return params.value;

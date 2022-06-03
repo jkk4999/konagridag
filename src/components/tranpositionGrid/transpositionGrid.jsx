@@ -22,7 +22,7 @@ import DotLoader from "react-spinners/DotLoader";
 import _ from "lodash";
 
 // subviews
-import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
+import DetailCellRenderer from "../../components/subViewRenderer2/subViewRenderer2";
 
 // Redux
 import { addMetadata } from "../../features/objectMetadataSlice";

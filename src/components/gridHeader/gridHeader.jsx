@@ -879,6 +879,7 @@ function GridHeader() {
     console.log("Relation preferences loaded");
   }
 
+  // get the template fields
   if (templateFields.isError) {
     // log error and notify user
     console.log(`gridHeader() - ${templateFields.error.message}`);
@@ -1318,6 +1319,7 @@ function GridHeader() {
     selectedObject,
     selectedQuery,
     userInfo,
+    objQueries.data,
   ]);
 
   return (

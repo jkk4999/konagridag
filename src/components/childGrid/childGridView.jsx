@@ -11,6 +11,10 @@ import React, {
 import { useSelector, useDispatch } from "react-redux";
 import { addMetadata } from "../../features/objectMetadataSlice";
 
+// react query hooks
+import useObjMetadata from "../../hooks/getObjMetadataHook";
+import useRelatedGridData from "../../hooks/getRelatedGridDataHook";
+
 // save template dialog
 import SaveTemplateDialog from "../../components/saveTemplateDialog/saveTemplateDialog";
 
@@ -21,7 +25,7 @@ import _ from "lodash";
 import { setLoadingIndicator } from "../../features/loadingIndicatorSlice";
 
 // grid functions
-import * as ghf from "../../views/gridView/gridFunctions";
+import * as ghf from "../../components/gridHeader/gridHeaderFuncs";
 
 // AgGrid
 import { AgGridReact } from "ag-grid-react";
@@ -71,14 +75,14 @@ const useStyles = makeStyles((theme) => ({
 
 function ChildGridView(props) {
   const {
-    masterObject,
     childObject,
-    masterGridRef,
-    relationPreferences,
     gridPreferences,
-    selectedObject,
-    selectedGridRow,
+    masterGridRef,
     objTemplates,
+    relationPreferences,
+    selectedGridRow,
+    selectedObject,
+    templateFields,
   } = props;
 
   const dispatch = useDispatch();
@@ -95,31 +99,56 @@ function ChildGridView(props) {
 
   const classes = useStyles();
 
-  // local state
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const prevSelectedTemplate = useRef(null);
-  const prevSelectedView = useRef(null);
-
   // redux global state
   const objectMetadata = useSelector((state) => state.objectMetadata);
   const userInfo = useSelector((state) => state.userInfo);
 
-  // local state// previous state values
+  // react query
+  const objMetadata = useObjMetadata(childObject, userInfo);
+
+  const relatedGridData = useRelatedGridData(
+    selectedObject,
+    selectedGridRow,
+    childObject,
+    userInfo
+  );
+
+  // local state
+  const templateOptions = useRef([]);
+  const prevTemplateOptions = useRef(null);
+
+  const [selectedTemplate, setSelectedTemplate] = useState();
+  const prevSelectedTemplate = useRef(null);
+
+  const [selectedView, setSelectedView] = useState("Grid");
+  const prevSelectedView = useRef(null);
+
+  const [viewOptions, setViewOptions] = useState([]);
+  const prevViewOptions = useRef(null);
+
+  const prevRelationPrefs = useRef(null);
+
+  const [objMetadataLoaded, setObjMetadataLoaded] = useState(false);
+
+  // aggrid state
   const [rowData, setRowData] = useState([]);
   const prevRowData = useRef(null);
-  const [colDefs, setColDefs] = useState([]);
-  const prevColDefs = useRef(null);
-  const [templateOptions, setTemplateOptions] = useState(null);
+
+  const [columnDefs, setColumnDefs] = useState([]);
+  const prevColumnDefs = useRef(null);
+
   const [changedRows, setChangedRows] = useState(null);
-  const prevRelationPrefs = useRef(null);
-  const prevViewOptions = useRef(null);
+
   const prevSelectedGridRow = useRef(null);
+  const prevChildObject = useRef(null);
+
+  // Create a lookup array.
+  // when a cell value is changed, its id is added here.
+  const changedCellIds = useRef([]);
 
   // local object references
   const gridRef = useRef(null);
   const templateSelectorRef = useRef(null);
-  const [viewOptions, setViewOptions] = useState([]);
-  const [selectedView, setSelectedView] = useState(null);
   const viewSelectorRef = useRef(null);
 
   // save template form
@@ -404,326 +433,248 @@ function ChildGridView(props) {
     }
   }
 
-  // populate view selector when relationPreferences changes
-  useEffect(() => {
-    const getViewOptions = async () => {
-      if (_.isEqual(prevViewOptions.current, viewOptions)) {
-        return;
+  // REACT QUERY
+
+  if (objMetadata.isError) {
+    // log error and notify user
+    console.log(`ChildGridView() - ${objMetadata.error.message}`);
+
+    // notify user of error
+    toast.error("Error retrieving metadata", { autoClose: 5000 });
+  }
+
+  function loadTemplateOptions() {
+    const options = [];
+    // load template options for this object
+    objTemplates.data.forEach((t) => {
+      if (t.object === childObject && t.is_related === true) {
+        const newOpt = {
+          id: t.id,
+          value: t.template_name,
+        };
+        options.push(newOpt);
       }
+    });
 
-      console.log(`${childObject} grid - loading view options`);
+    console.log(`template options loaded`);
 
-      // always have a Grid view
-      let optionsList = ["Grid"];
+    templateOptions.current = options;
+    prevTemplateOptions.current = options;
 
-      // get relation preferences for the selected object
-      const relationPref = relationPreferences.data.preferences.find(
-        (f) => f.object === masterObject.id
+    return options;
+  }
+
+  function getTemplate(tmpOptions) {
+    if (tmpOptions.length === 0) {
+      // no templates defined for this object
+
+      // notify user of error
+      toast.warn(`No templates defined for ${childObject}!`, {
+        autoClose: 3000,
+      });
+
+      setSelectedTemplate(null);
+
+      // create default grid columns
+      let defaultGridCols = ghf.createDefaultGridColumns2(
+        childObject,
+        objMetadata,
+        changedCellIds
+      );
+      setColumnDefs(defaultGridCols);
+      prevColumnDefs.current = defaultGridCols;
+      console.log(`default grid columns created`);
+      return null;
+    }
+
+    // get template and query preferences for selectedObject
+    const gridPref = gridPreferences.data.find(
+      (p) => p.object === childObject && p.is_related === true
+    );
+
+    if (gridPref) {
+      // find the template option with this Id
+      const tmpOption = tmpOptions.current.find(
+        (o) => o.id === gridPref.templateid
       );
 
-      if (relationPref) {
-        // find the prefs for the child object
-        const objPref = relationPref.relations.find(
-          (r) => r.id === childObject
-        );
-
-        if (objPref && objPref.gantView) {
-          optionsList.push("Gantt");
-        }
-
-        if (objPref && objPref.kanbanView) {
-          optionsList.push("Kanban");
-        }
-
-        if (objPref && objPref.transpositionView) {
-          optionsList.push("Transposition");
-        }
-
-        if (objPref && objPref.scheduleView) {
-          optionsList.push("Schedule");
-        }
-      }
-
-      setViewOptions([...optionsList]);
-
-      prevViewOptions.current = [...optionsList];
-
-      setSelectedView(optionsList[0]);
-
-      prevSelectedView.current = optionsList[0];
-    };
-
-    getViewOptions();
-  }, [relationPreferences.data, viewOptions, childObject, masterObject]);
-
-  useEffect(() => {
-    /*  
-      1 - load the template options
-      2 - set selected template based on preferences or defaults
-  */
-
-    const configureGrid = async () => {
-      if (_.isEqual(colDefs, prevColDefs.current)) {
-        return;
-      }
-
-      console.log(`configureGrid useEffect running for ${childObject}`);
-
-      // check for metadata
-      let objMetadata = objectMetadata.find((f) => f.objName === childObject);
-
-      if (objMetadata === undefined) {
-        // get object metadata
-        console.log(`Getting object metadata for ${childObject}`);
-        const metadataResult = await ghf.getObjectMetadata(
-          childObject,
-          userInfo,
-          objectMetadata
-        );
-
-        if (metadataResult.status !== "ok") {
-          throw new Error(`Error retrieving metadata for ${childObject}`);
-        }
-
-        // store object metadata in global state
-        objMetadata = {
-          objName: childObject,
-          metadata: metadataResult.records,
-        };
-
-        dispatch(addMetadata(objMetadata));
-      }
-
-      setLoadingIndicator(true);
-
-      try {
-        // load template options for this object
-        let tmpOptions = [];
-        objTemplates.data.forEach((t) => {
-          if (t.object === childObject && t.is_related === true) {
-            const newOpt = {
-              id: t.id,
-              value: t.template_name,
-            };
-            tmpOptions.push(newOpt);
-          }
-        });
-
-        setTemplateOptions(tmpOptions);
-
-        // get user preferences
-        // get template and query preferences for selectedObject
-        const gridPref = gridPreferences.data.find(
-          (p) => p.object === childObject && p.is_related === true
-        );
-
-        if (gridPref) {
-          // find the template option with this Id
-          const tmpOption = tmpOptions.find(
-            (o) => o.id === gridPref.templateid
-          );
-
-          // use this template
-          setSelectedTemplate(tmpOption);
-
-          console.log(
-            `Found user template preference for ${childObject}.  Setting selectedTemplate state to ${tmpOption.value}`
-          );
-        }
-
-        if (!gridPref) {
-          // check for default template preference
-          let defaultTemplate = objTemplates.data.find(
-            (t) => t.object === childObject && t.default === true
-          );
-
-          if (defaultTemplate) {
-            const defaultPref = {
-              id: defaultTemplate.id,
-              value: defaultTemplate.template_name,
-            };
-            setSelectedTemplate(defaultPref);
-            console.log(
-              `Found default template for ${childObject}.  Setting selectedTemplate state to ${defaultPref.value}`
-            );
-          } else {
-            // use the first template
-            if (tmpOptions.length > 0) {
-              setSelectedTemplate(tmpOptions[0]);
-              console.log(
-                `No default template found for ${childObject}.  Setting selectedTemplate to ${tmpOptions[0].value}`
-              );
-            }
-          }
-        }
-      } catch (error) {
-        setLoadingIndicator(false);
-
-        // log error and notify user
-        console.log(error.message);
-
-        // notify user of error
-        toast.error(error.message, { autoClose: 5000 });
-      }
-    };
-
-    configureGrid();
-  }, [
-    childObject,
-    masterObject,
-    selectedGridRow,
-    colDefs,
-    objectMetadata,
-    userInfo,
-  ]);
-
-  // selectedTemplate changed
-  useEffect(() => {
-    /*  when the selected template changes
-      1 - create the grid columns
-    */
-
-    const createGridColumns = async () => {
-      if (_.isEqual(selectedTemplate, prevSelectedTemplate.current)) {
-        return;
-      }
+      // use this template
+      setSelectedTemplate(tmpOption);
 
       console.log(
-        `${childObject} grid selectedTemplateChanged() - creating grid columns`
+        `useEffect childGridView templateChanged() - Found user template preference for ${childObject}.  Setting selectedTemplate state to ${tmpOption.value}`
+      );
+      return tmpOption;
+    }
+
+    if (!gridPref) {
+      // check for default template preference
+      let defaultTemplate = objTemplates.data.find(
+        (t) =>
+          t.object === childObject &&
+          t.is_related === true &&
+          t.default === true
       );
 
-      prevSelectedTemplate.current = selectedTemplate;
-
-      // check for metadata
-      const objMetadata = objectMetadata.find((f) => f.objName === childObject);
-
-      if (objMetadata === undefined) {
-        // get object metadata
-        console.log(`Getting object metadata for ${childObject}`);
-        const metadataResult = await ghf.getObjectMetadata(
-          childObject,
-          userInfo,
-          objectMetadata
-        );
-
-        if (metadataResult.status !== "ok") {
-          throw new Error(`Error retrieving metadata for ${childObject}`);
-        }
-
-        // store object metadata in global state
-        objMetadata = {
-          objName: childObject,
-          metadata: metadataResult.records,
+      if (defaultTemplate) {
+        const defaultPref = {
+          id: defaultTemplate.id,
+          value: defaultTemplate.template_name,
         };
-
-        dispatch(addMetadata(objMetadata));
-      }
-
-      if (selectedTemplate) {
-        const result = await ghf.getTemplateFields(selectedTemplate);
-
-        if (result.status === "error") {
-          throw new Error("Error retrieving temmplate fields");
-        }
-
-        // create the grid columns
-        let gridCols = await ghf.createGridColumns(
-          childObject,
-          result.records,
-          objMetadata,
-          gridRef
+        setSelectedTemplate(defaultPref);
+        console.log(
+          `ChildGridView - Found default template for ${childObject}.  Setting selectedTemplate state to ${defaultPref.value}`
         );
-
-        setColDefs(gridCols);
-        prevColDefs.current = gridCols;
-      }
-    };
-
-    createGridColumns();
-  }, [selectedTemplate, childObject, objectMetadata, prevSelectedTemplate]);
-
-  // selectedRow changed
-  useEffect(() => {
-    // get the data when the selected row changes
-
-    const getData = async () => {
-      if (_.isEqual(selectedGridRow, prevSelectedGridRow.current)) {
-        return;
       }
 
-      prevSelectedGridRow.current = selectedGridRow;
-
-      console.log(`${childObject} grid selectedRowChanged - getData())`);
-
-      // get the data
-      let whereClause = null;
-
-      const masterObj = masterObject.id;
-      if (masterObj.slice(-3) === "__c") {
-        whereClause = `${masterObj} = '${selectedGridRow.Id}'`;
-      } else {
-        whereClause = `${masterObj}Id = '${selectedGridRow.Id}'`;
+      if (!defaultTemplate) {
+        // use the first one
+        setSelectedTemplate(tmpOptions[0]);
+        return tmpOptions[0];
       }
+    }
+  }
 
-      const response = await ghf.runQuery(childObject, whereClause);
+  // load template options
+  // set selectedTemplate based on preferences or defaults
+  if (
+    objMetadata.isSuccess &&
+    !_.isEqual(templateOptions.current, prevTemplateOptions.current) &&
+    !_.isEqual(columnDefs, prevColumnDefs.current)
+  ) {
+    try {
+      const tmpOptions = loadTemplateOptions();
 
-      if (response.status === "error") {
-        throw new Error(`Error retrieving related records for ${childObject}`);
-      }
-
-      const data = response.records[0];
-
+      const template = getTemplate(tmpOptions);
+    } catch (error) {
       setLoadingIndicator(false);
 
-      setRowData(data);
-      prevRowData.current = data;
-    };
+      // log error and notify user
+      console.log(error.message);
 
-    getData();
-  }, [selectedGridRow, childObject, colDefs, rowData, masterObject.id]);
+      // notify user of error
+      toast.error(error.message, { autoClose: 5000 });
+    }
+  }
 
-  // selectedView changed
-  useEffect(() => {
-    /*
-        1 - create the child view based on user input
-    */
-
-    const createView = async () => {
-      if (!selectedView) {
-        return;
+  // selected template changed - create the grid columns
+  if (
+    objMetadata.isSuccess &&
+    templateFields.isSuccess &&
+    selectedTemplate &&
+    !_.isEqual(selectedTemplate, prevSelectedTemplate.current)
+  ) {
+    // get the template fields for selected template
+    const tempFields = [];
+    templateFields.data.forEach((f) => {
+      if (f.templateid === selectedTemplate.id) {
+        tempFields.push(f);
       }
+    });
 
-      console.log(`${childObject} grid selectedViewChanged())`);
+    if (tempFields.length > 0) {
+      const gridCols = ghf.createGridColumns2(
+        childObject,
+        tempFields,
+        objMetadata,
+        changedCellIds
+      );
 
-      switch (selectedView) {
-        case "Grid": {
-          // TBD
-          return <h1>Grid View</h1>;
+      setColumnDefs([...gridCols]);
+      prevSelectedTemplate.current = selectedTemplate;
+      console.log(`Grid columns created for ${selectedTemplate.value}`);
+    } else {
+      // log error and notify user
+      console.log(
+        `No template fields found for ${selectedTemplate.template_name}`
+      );
+
+      // notify user of error
+      toast.error(
+        `No template fields found for ${selectedTemplate.template_name}`,
+        { autoClose: 5000 }
+      );
+    }
+  }
+
+  if (relatedGridData.isError) {
+    // log error and notify user
+    console.log(`ChildGridView() - ${relatedGridData.error.message}`);
+
+    // notify user of error
+    toast.error("Error retrieving grid records", { autoClose: 5000 });
+  }
+
+  if (
+    relatedGridData.isSuccess &&
+    !_.isEqual(prevRowData.current, relatedGridData.data)
+  ) {
+    prevRowData.current = relatedGridData.data;
+    setRowData(relatedGridData.data[0]);
+    console.log("row data created");
+  }
+
+  // set view preferences
+  if (
+    relationPreferences.isSuccess &&
+    !_.isEqual(relationPreferences.data, prevRelationPrefs.current)
+  ) {
+    prevRelationPrefs.current = relationPreferences.data;
+
+    const viewPrefs = [];
+    const objPref = relationPreferences.data.preferences.find(
+      (f) => f.object === selectedObject.id
+    );
+
+    if (objPref) {
+      // found the prefs for this object
+      const pref = objPref.relations.find((f) => f.id === childObject);
+
+      if (pref) {
+        if (pref.selected) {
+          viewPrefs.push("Grid");
         }
-        case "Gantt": {
-          // TBD
-          return <h1>Gantt View</h1>;
+        if (pref.transpositionView) {
+          viewPrefs.push("Transpostion");
         }
-        case "Transposition": {
-          // TBD
-          return <h1>Transposition View</h1>;
+        if (pref.ganttView) {
+          viewPrefs.push("Gantt");
         }
-        case "Schedule": {
-          // TBD
-          return <h1>Schedule View</h1>;
+        if (pref.kanbanView) {
+          viewPrefs.push("Kanban");
         }
-        case "Kanban": {
-          // TBD
-          return <h1>Kanban View</h1>;
-        }
-        default: {
-          return <h1>No view found</h1>;
+        if (pref.scheduleView) {
+          viewPrefs.push("Schedule");
         }
       }
-    };
+    }
 
-    createView();
-  }, [selectedView, childObject]);
+    setViewOptions(viewPrefs);
+    prevViewOptions.current = viewPrefs;
+  }
+
+  // selectedViewPrefernce changed
+  if (!_.isEqual(selectedView, prevSelectedView.current)) {
+    prevSelectedView.current = selectedView;
+
+    switch (selectedView) {
+      case "Grid": {
+        break;
+      }
+      case "Gantt": {
+        break;
+      }
+      case "Kanban": {
+        break;
+      }
+      case "Schedule": {
+        break;
+      }
+      case "Transposition": {
+        break;
+      }
+    }
+  }
 
   const autoGroupColumnDef = useMemo(() => {
     return {
@@ -734,6 +685,13 @@ function ChildGridView(props) {
       },
     };
   }, []);
+
+  // register AgGrid components
+  const components = {
+    // agGridAutoComplete: AgGridAutocomplete,
+    // autoCompleteEditor: AutoCompleteEditor,
+    checkboxRenderer: CheckboxRenderer,
+  };
 
   return (
     <Box
@@ -873,10 +831,10 @@ function ChildGridView(props) {
         <Autocomplete
           id='templateSelector'
           autoComplete
-          getOptionLabel={(option) => (option ? option.label : "")}
+          getOptionLabel={(option) => (option ? option.value : "")}
           includeInputInList
           isOptionEqualToValue={(option, value) => option.id === value.id}
-          options={templateOptions}
+          options={templateOptions.current}
           value={selectedTemplate ? selectedTemplate : null}
           ref={templateSelectorRef}
           renderInput={(params) => (
@@ -905,17 +863,21 @@ function ChildGridView(props) {
         />
       </Toolbar>
 
+      {/* add view router */}
+
       <div style={containerStyle}>
         <div style={gridStyle} className='ag-theme-alpine'>
           <AgGridReact
             animateRows={true}
             autoGroupColumnDef={autoGroupColumnDef}
             defaultColDef={defaultColDef}
-            columnDefs={colDefs}
+            columnDefs={columnDefs}
             columnTypes={columnTypes}
+            components={components}
             enableColResize='true'
             getRowId={getRowId}
             groupDisplayType={"singleColumn"}
+            masterDetail={false}
             onCellValueChanged={gridCellValueChanged}
             onFirstDataRendered={onFirstDataRendered}
             ref={gridRef}
@@ -932,4 +894,4 @@ function ChildGridView(props) {
   );
 }
 
-export default React.memo(ChildGridView);
+export default ChildGridView;

@@ -38,7 +38,8 @@ import { toast } from "react-toastify";
 import _ from "lodash";
 
 // subviews
-import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
+// import DetailCellRenderer from "../../components/subviewRenderer/subviewRenderer";
+import DetailCellRenderer from "../../components/subViewRenderer2/subViewRenderer2";
 
 // css rules in jss
 const useStyles = makeStyles((theme) => ({
@@ -196,7 +197,6 @@ const MainGrid = React.forwardRef((props, ref) => {
     selectedObject,
     selectedQuery,
     userInfo,
-    dispatch,
   ]);
 
   const saveHandler = (msg, data) => {
@@ -296,7 +296,13 @@ const MainGrid = React.forwardRef((props, ref) => {
     };
 
     tmpChanged();
-  }, [selectedObject, selectedTemplate, ref, objectMetadata]);
+  }, [
+    selectedObject,
+    selectedTemplate,
+    ref,
+    objectMetadata,
+    templateFields.data,
+  ]);
 
   // query changed
   useEffect(() => {
@@ -312,7 +318,6 @@ const MainGrid = React.forwardRef((props, ref) => {
       // need to check if the selected query is for the selected object
       // main grid could render while the previous query for a different object is loaded
       // this happens when we have a asyncronous operation like getting metadata
-      // find the query
       const q = objQueries.data.find((f) => f.id === selectedQuery.id);
       if (q.object !== selectedObject.id) {
         return;
@@ -333,7 +338,7 @@ const MainGrid = React.forwardRef((props, ref) => {
     };
 
     queryChanged();
-  }, [selectedQuery, getQueryData]);
+  }, [selectedQuery, getQueryData, objQueries.data, selectedObject.id]);
 
   // RunQuery - subscribe to runQuery toolbar event
   useEffect(() => {
@@ -351,7 +356,7 @@ const MainGrid = React.forwardRef((props, ref) => {
     return () => {
       PubSub.unsubscribe(runQueryToken);
     };
-  }, []);
+  }, [getQueryData]);
 
   // AddRecord - subscribe to toolbar event
   useEffect(() => {
@@ -398,7 +403,7 @@ const MainGrid = React.forwardRef((props, ref) => {
       switch (msg) {
         case "CreateDefaultGridColumns": {
           // create default grid columns
-          let defaultGridCols = await ghf.createDefaultGridColumns(
+          let defaultGridCols = ghf.createDefaultGridColumns(
             selectedObject.id,
             objectMetadata,
             changedCellIds
@@ -519,13 +524,14 @@ const MainGrid = React.forwardRef((props, ref) => {
   // agGrid passes these values to subGrid
   const detailCellRendererParams = useMemo(() => {
     return {
-      masterObject: selectedObject,
+      selectedObject: selectedObject,
       masterGridRef: ref,
       relationPreferences: relationPreferences,
       objTemplates: objTemplates,
       gridPreferences: gridPreferences,
+      templateFields: templateFields,
     };
-  }, [ref, relationPreferences, selectedObject, objTemplates]);
+  }, [ref, relationPreferences, selectedObject, objTemplates, gridPreferences]);
 
   const doesExternalFilterPass = useCallback((node) => {
     return node.data.error;
@@ -651,7 +657,7 @@ const MainGrid = React.forwardRef((props, ref) => {
         },
       ],
     };
-  }, [selectedObject, objectOptions]);
+  }, [selectedObject, objectOptions, objPreferences, relationPreferences]);
 
   // register AgGrid components
   const components = {
@@ -663,6 +669,32 @@ const MainGrid = React.forwardRef((props, ref) => {
   if (!columnDefs || !rowData) {
     return <></>;
   }
+
+  const GridChild = (props) => {
+    const masterObject = props.masterObject;
+    const masterGridRef = props.masterGridRef;
+    const relationPreferences = props.relationPreferences;
+    const objTemplates = props.objTemplates;
+    const gridPreferences = props.gridPreferences;
+    const renderCount = useRef(0);
+    renderCount.current = renderCount.current + 1;
+    console.log(`GridChild render count = ${renderCount.current}`); // fires only once - on initial render
+
+    const tabArray = [];
+
+    const objectPreferences = relationPreferences.data.preferences.find(
+      (p) => p.object === masterObject.id
+    );
+
+    if (!objectPreferences) {
+      return;
+    }
+    return <div>{`Render count is ${renderCount.current}`}</div>;
+  };
+
+  // const GridChildRenderer = React.memo(GridChild);
+
+  const detailCellRenderer = React.memo(DetailCellRenderer);
 
   return (
     <Box
@@ -688,7 +720,8 @@ const MainGrid = React.forwardRef((props, ref) => {
             columnTypes={columnTypes}
             components={components}
             defaultColDef={defaultColDef}
-            detailCellRenderer={DetailCellRenderer}
+            detailCellRenderer={detailCellRenderer}
+            // detailCellRenderer={GridChildRenderer}
             detailCellRendererParams={detailCellRendererParams}
             detailRowHeight={500}
             doesExternalFilterPass={doesExternalFilterPass}

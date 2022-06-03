@@ -90,18 +90,18 @@ function GridViewRenderer(props) {
     case "Grid": {
       return (
         <MainGrid
-          ref={mainGridRef}
-          queryBuilderRef={queryBuilderRef}
+          gridPreferences={gridPreferences}
           objectOptions={objectOptions}
           objPreferences={objPreferences}
-          gridPreferences={gridPreferences}
+          objTemplates={objTemplates}
+          objQueries={objQueries}
+          queryBuilderRef={queryBuilderRef}
+          ref={mainGridRef}
           relationPreferences={relationPreferences}
           selectedObject={selectedObject}
           selectedTemplate={selectedTemplate}
           selectedQuery={selectedQuery}
           templateFields={templateFields}
-          objTemplates={objTemplates}
-          objQueries={objQueries}
           startTime={startTime}
           endTime={endTime}
         />
