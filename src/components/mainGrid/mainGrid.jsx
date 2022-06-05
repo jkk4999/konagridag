@@ -138,33 +138,48 @@ const MainGrid = React.forwardRef((props, ref) => {
       try {
         console.log("Main grid - getting query data");
 
-        const queryRule = queryBuilderRef.current.getRules();
-
         let objMetadataFields = objMetadata.data.fields;
 
+        // get rule from QueryBuilder
+        const queryRule = queryBuilderRef.current.getRules();
+
         // get the query
-        const sqlResult = await ghf.getQuerySQL(
+        const sqlResult = ghf.getQuerySQL(
           queryRule,
           objMetadataFields,
           selectedObject.id
         );
 
         // run query
-        const executeQueryResult = await ghf.runQuery(
-          selectedObject.id,
-          sqlResult
-        );
+        const url = "/salesforce/gridQuery";
 
-        if (executeQueryResult.status !== "ok") {
-          throw new Error(
-            `MainGrid - Error executing query for ${selectedQuery.id}`
-          );
+        const payload = {
+          objName: selectedObject.id,
+          whereClause: sqlResult,
+        };
+
+        let response = await fetch(url, {
+          method: "post",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`RunQuery() - ${response.message}`);
         }
 
-        let queryData = executeQueryResult.records[0];
+        let result = await response.json();
+
+        if (result.status === "error") {
+          throw new Error(`Error executing query ${selectedQuery.value}`);
+        }
+
+        const data = result.records[0];
 
         // update grid row state
-        setRowData([...queryData]);
+        setRowData(data);
 
         console.log("Main grid data loaded");
 
@@ -379,42 +394,6 @@ const MainGrid = React.forwardRef((props, ref) => {
     // notify user of error
     toast.error(queryData.error.message, { autoClose: 5000 });
   }
-
-  // query changed
-  // useEffect(() => {
-  //   const queryChanged = async () => {
-  //     if (!selectedQuery) {
-  //       setRowData([]);
-  //       console.log(
-  //         "MainGrid useEffect queryChanged - returning selected query is null"
-  //       );
-  //       return;
-  //     }
-
-  //     // need to check if the selected query is for the selected object
-  //     // main grid could render while the previous query for a different object is loaded
-  //     // this happens when we have a asyncronous operation like getting metadata
-  //     const q = objQueries.data.find((f) => f.id === selectedQuery.id);
-  //     if (q.object !== selectedObject.id) {
-  //       return;
-  //     }
-
-  //     // if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
-  //     //   console.log("MainGrid useEffect queryChanged - query has not changed");
-  //     //   return;
-  //     // }
-
-  //     console.log(
-  //       `MainGrid UseEffect queryChanged - query is ${selectedQuery.value}`
-  //     );
-
-  //     prevSelectedQuery.current = selectedQuery;
-
-  //     getQueryData();
-  //   };
-
-  //   queryChanged();
-  // }, [selectedQuery, getQueryData, objQueries.data, selectedObject.id]);
 
   // RunQuery - subscribe to runQuery toolbar event
   useEffect(() => {
