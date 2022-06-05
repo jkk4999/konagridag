@@ -22,6 +22,7 @@ function GridViewRenderer(props) {
     mainGridRef,
     objectOptions,
     objPreferences,
+    objMetadata,
     objQueries,
     objTemplates,
     queryBuilderRef,
@@ -92,6 +93,7 @@ function GridViewRenderer(props) {
         <MainGrid
           gridPreferences={gridPreferences}
           objectOptions={objectOptions}
+          objMetadata={objMetadata}
           objPreferences={objPreferences}
           objTemplates={objTemplates}
           objQueries={objQueries}

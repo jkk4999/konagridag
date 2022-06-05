@@ -6,8 +6,19 @@ import React, {
   useCallback,
 } from "react";
 
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  QueryClient,
+  QueryClientProvider,
+} from "react-query";
+
 // Redux
 import { useSelector, useDispatch } from "react-redux";
+
+// react query hooks
+// import useSelectedQuery from "../../hooks/getSelectedQueryHook";
 
 import PubSub from "pubsub-js";
 
@@ -62,6 +73,7 @@ let newRowTracking = [];
 const MainGrid = React.forwardRef((props, ref) => {
   const {
     queryBuilderRef,
+    objMetadata,
     objectOptions,
     objPreferences,
     relationPreferences,
@@ -95,6 +107,14 @@ const MainGrid = React.forwardRef((props, ref) => {
   const [rowData, setRowData] = useState(null);
   const selectedGridRow = useRef(null);
 
+  // react query
+  // const queryData = useSelectedQuery(
+  //   selectedObject,
+  //   selectedQuery,
+  //   queryBuilderRef.current,
+  //   userInfo
+  // );
+
   // Create a lookup array.
   // when a cell value is changed, its id is added here.
   const changedCellIds = useRef([]);
@@ -118,30 +138,9 @@ const MainGrid = React.forwardRef((props, ref) => {
       try {
         console.log("Main grid - getting query data");
 
-        // dispatch(setLoadingIndicator(true));
-
         const queryRule = queryBuilderRef.current.getRules();
 
-        // if (queryRule.rules.length === 0) {
-        //   console.log("Main grid exiting - query rules are 0");
-        //   // dispatch(setLoadingIndicator(false));
-        //   return;
-        // }
-
-        // // get query from database
-        // const query = objQueries.data.find((q) => q.id === selectedQuery.id);
-
-        // const queryRule = query.query_rules;
-
-        // get object metadata
-        const metadataResult = await ghf.getObjectMetadata(
-          selectedObject.id,
-          userInfo,
-          objectMetadata
-        );
-        const objMetadata = metadataResult.records;
-
-        let objMetadataFields = objMetadata.metadata.fields;
+        let objMetadataFields = objMetadata.data.fields;
 
         // get the query
         const sqlResult = await ghf.getQuerySQL(
@@ -191,13 +190,7 @@ const MainGrid = React.forwardRef((props, ref) => {
     };
 
     getData();
-  }, [
-    objectMetadata,
-    queryBuilderRef,
-    selectedObject,
-    selectedQuery,
-    userInfo,
-  ]);
+  }, [objMetadata, queryBuilderRef, selectedObject, selectedQuery, userInfo]);
 
   const saveHandler = (msg, data) => {
     switch (msg) {
@@ -219,126 +212,209 @@ const MainGrid = React.forwardRef((props, ref) => {
     }
   };
 
-  // selected template changed
-  useEffect(() => {
-    // when selected template changes, create the grid columns
-    const tmpChanged = async () => {
-      if (!selectedTemplate || Object.keys(selectedTemplate).length === 0) {
-        setLoadingIndicator(false);
-        return;
+  // REACT QUERY
+
+  // if (useSelectedQuery.isLoading) {
+  //   dispatch(setLoadingIndicator(true));
+  // } else {
+  //   dispatch(setLoadingIndicator(false));
+  // }
+
+  if (objPreferences.isError) {
+    // log error and notify user
+    console.log(`gridHeader() - ${objPreferences.error.message}`);
+
+    // notify user of error
+    toast.error(objPreferences.error.message, { autoClose: 5000 });
+
+    dispatch(setLoadingIndicator(false));
+  }
+
+  // if (objPreferences.isLoading) {
+  //   dispatch(setLoadingIndicator(true));
+  // } else {
+  //   dispatch(setLoadingIndicator(false));
+  // }
+
+  // SELECTED TEMPLATE CHANGED
+  if (
+    !selectedTemplate ||
+    !_.isEqual(selectedTemplate, prevSelectedTemplate.current)
+  ) {
+    prevSelectedTemplate.current = { ...selectedTemplate };
+
+    console.log(
+      `MainGrid SelectedTemplateChanged - to template ${selectedTemplate.value}`
+    );
+
+    try {
+      // get the template fields for selected template
+      const tempFields = [];
+      templateFields.data.forEach((f) => {
+        if (f.templateid === selectedTemplate.id) {
+          tempFields.push(f);
+        }
+      });
+
+      if (tempFields.length === 0) {
+        throw new Error(
+          `MainGrid SelectedTemplateChanged - No template fields found for template ${selectedTemplate.id}`
+        );
       }
 
-      // if selected template hasn't changed, return
-      if (_.isEqual(selectedTemplate, prevSelectedTemplate.current)) {
-        setLoadingIndicator(false);
-        return;
-      }
-
-      // dispatch(setLoadingIndicator(true));
-
-      prevSelectedTemplate.current = { ...selectedTemplate };
-
-      console.log(
-        `MainGrid UseEffect SelectedTemplateChanged - to template ${selectedTemplate.value}`
+      // create the grid columns
+      const gridCols = ghf.createGridColumns2(
+        tempFields,
+        objMetadata,
+        changedCellIds
       );
 
-      try {
-        // get the template fields for selected template
-        const tempFields = [];
-        templateFields.data.forEach((f) => {
-          if (f.templateid === selectedTemplate.id) {
-            tempFields.push(f);
-          }
-        });
+      setColumnDefs([...gridCols]);
 
-        if (tempFields.length === 0) {
-          throw new Error(
-            `MainGrid UseEffect SelectedTemplateChanged - No template fields found for template ${selectedTemplate.id}`
-          );
-        }
+      console.log(
+        "MainGrid UseEffect SelectedTemplateChanged - grid columns created"
+      );
 
-        // create the grid columns
-        const gridCols = ghf.createGridColumns(
-          selectedObject.id,
-          tempFields,
-          objectMetadata,
-          changedCellIds
-        );
+      // endTime.current = performance.now();
 
-        setColumnDefs([...gridCols]);
+      // console.log(
+      //   `Main grid templates created in ${
+      //     endTime.current - startTime.current
+      //   } milliseconds`
+      // );
 
-        console.log(
-          "MainGrid UseEffect SelectedTemplateChanged - grid columns created"
-        );
+      // startTime.current = performance.now();
 
-        // endTime.current = performance.now();
+      // dispatch(setLoadingIndicator(false));
+    } catch (error) {
+      // dispatch(setLoadingIndicator(false));
 
-        // console.log(
-        //   `Main grid templates created in ${
-        //     endTime.current - startTime.current
-        //   } milliseconds`
-        // );
+      // log error and notify user
+      console.log(`MainGrid SelectedTemplateChanged - ${error.message}`);
 
-        // startTime.current = performance.now();
+      // notify user of error
+      toast.error(error.message, { autoClose: 5000 });
+    }
+  }
 
-        // dispatch(setLoadingIndicator(false));
-      } catch (error) {
-        // dispatch(setLoadingIndicator(false));
-
-        // log error and notify user
-        console.log(
-          `MainGrid UseEffect SelectedTemplateChanged - ${error.message}`
-        );
-
-        // notify user of error
-        toast.error(error.message, { autoClose: 5000 });
-      }
-    };
-
-    tmpChanged();
-  }, [
-    selectedObject,
-    selectedTemplate,
-    ref,
-    objectMetadata,
-    templateFields.data,
-  ]);
-
-  // query changed
-  useEffect(() => {
-    const queryChanged = async () => {
-      if (!selectedQuery) {
-        setRowData([]);
-        console.log(
-          "MainGrid useEffect queryChanged - returning selected query is null"
-        );
-        return;
-      }
-
+  // SELECTED QUERY CHANGED
+  const queryData = useQuery(
+    ["objQuery", selectedQuery],
+    async () => {
       // need to check if the selected query is for the selected object
       // main grid could render while the previous query for a different object is loaded
       // this happens when we have a asyncronous operation like getting metadata
-      const q = objQueries.data.find((f) => f.id === selectedQuery.id);
-      if (q.object !== selectedObject.id) {
-        return;
-      }
-
-      // if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
-      //   console.log("MainGrid useEffect queryChanged - query has not changed");
+      // const q = objQueries.find((f) => f.id === selectedQuery.id);
+      // if (q.object !== selectedObject.id) {
       //   return;
       // }
 
-      console.log(
-        `MainGrid UseEffect queryChanged - query is ${selectedQuery.value}`
-      );
+      console.log(`queryData queryChanged - query is ${selectedQuery.value}`);
 
-      prevSelectedQuery.current = selectedQuery;
+      // get query from database
+      const query = objQueries.data.find((q) => q.id === selectedQuery.id);
 
-      getQueryData();
-    };
+      const queryRule = query.query_rules;
 
-    queryChanged();
-  }, [selectedQuery, getQueryData, objQueries.data, selectedObject.id]);
+      // const queryRule = queryBuilderRef.current.getRules();
+
+      const objFields = objMetadata.data.fields;
+
+      const querySql = ghf.getQuerySQL(queryRule, objFields, selectedObject.id);
+
+      let objMetadataFields = objMetadata.data.fields;
+
+      const url = "/salesforce/gridQuery";
+
+      const payload = {
+        objName: selectedObject.id,
+        whereClause: querySql,
+      };
+
+      let response = await fetch(url, {
+        method: "post",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`SelectedQueryChanged() - ${response.message}`);
+      }
+
+      let result = await response.json();
+
+      if (result.status === "error") {
+        throw new Error(`Error executing query ${selectedQuery.value}`);
+      }
+
+      return result.records;
+    },
+    {
+      enabled:
+        Object.keys(userInfo).length > 0 &&
+        selectedObject !== null &&
+        selectedQuery !== null,
+      staleTime: 60 * 60 * 1000, // 1 hour
+    }
+  );
+
+  if (
+    queryData.isSuccess &&
+    !_.isEqual(selectedQuery, prevSelectedQuery.current)
+  ) {
+    const data = queryData.data[0];
+    setRowData(data);
+
+    console.log(`Query ${selectedQuery.value} data loaded`);
+
+    prevSelectedQuery.current = selectedQuery;
+  }
+
+  if (queryData.isError) {
+    // log error and notify user
+    console.log(`gridHeader() - ${queryData.error.message}`);
+
+    // notify user of error
+    toast.error(queryData.error.message, { autoClose: 5000 });
+  }
+
+  // query changed
+  // useEffect(() => {
+  //   const queryChanged = async () => {
+  //     if (!selectedQuery) {
+  //       setRowData([]);
+  //       console.log(
+  //         "MainGrid useEffect queryChanged - returning selected query is null"
+  //       );
+  //       return;
+  //     }
+
+  //     // need to check if the selected query is for the selected object
+  //     // main grid could render while the previous query for a different object is loaded
+  //     // this happens when we have a asyncronous operation like getting metadata
+  //     const q = objQueries.data.find((f) => f.id === selectedQuery.id);
+  //     if (q.object !== selectedObject.id) {
+  //       return;
+  //     }
+
+  //     // if (_.isEqual(selectedQuery, prevSelectedQuery.current)) {
+  //     //   console.log("MainGrid useEffect queryChanged - query has not changed");
+  //     //   return;
+  //     // }
+
+  //     console.log(
+  //       `MainGrid UseEffect queryChanged - query is ${selectedQuery.value}`
+  //     );
+
+  //     prevSelectedQuery.current = selectedQuery;
+
+  //     getQueryData();
+  //   };
+
+  //   queryChanged();
+  // }, [selectedQuery, getQueryData, objQueries.data, selectedObject.id]);
 
   // RunQuery - subscribe to runQuery toolbar event
   useEffect(() => {
@@ -403,9 +479,9 @@ const MainGrid = React.forwardRef((props, ref) => {
       switch (msg) {
         case "CreateDefaultGridColumns": {
           // create default grid columns
-          let defaultGridCols = ghf.createDefaultGridColumns(
+          let defaultGridCols = ghf.createDefaultGridColumns2(
             selectedObject.id,
-            objectMetadata,
+            objMetadata,
             changedCellIds
           );
 

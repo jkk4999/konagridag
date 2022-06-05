@@ -43,7 +43,7 @@ export default function useObjMetadata(sobject, userInfo) {
     ["objMetadata", sobject, userInfo],
     () => fetchObjMetadata(sobject, userInfo),
     {
-      enabled: Object.keys(userInfo).length > 0,
+      enabled: Object.keys(userInfo).length > 0 && sobject !== null,
     }
   );
 }

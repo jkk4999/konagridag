@@ -34,11 +34,8 @@ class SelectTemplate extends React.Component {
     const args = this.state;
     const selectedObject = args.selectedObject ? args.selectedObject.id : null;
     const queryField = args.field;
-    const objectMetadata = args.objectMetadata;
-    const objMetadata = objectMetadata.find(
-      (f) => f.objName === selectedObject
-    );
-    const metadataFields = objMetadata.metadata.fields;
+    const objMetadata = args.objMetadata;
+    const metadataFields = objMetadata.data.fields;
     const metadataField = metadataFields.find((f) => f.name === queryField);
     const picklistValues = metadataField.picklistValues;
 

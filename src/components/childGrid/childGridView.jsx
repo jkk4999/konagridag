@@ -114,7 +114,7 @@ function ChildGridView(props) {
   );
 
   // local state
-  const templateOptions = useRef([]);
+  const [templateOptions, setTemplateOptions] = useState([]);
   const prevTemplateOptions = useRef(null);
 
   const [selectedTemplate, setSelectedTemplate] = useState();
@@ -300,10 +300,9 @@ function ChildGridView(props) {
       });
 
       // create the template records
-      const templateRecs = ghf.createSaveTemplateRecords(
-        childObject,
+      const templateRecs = ghf.createSaveTemplateRecords2(
         visibleColumns,
-        objectMetadata,
+        objMetadata,
         selectedTemplate
       );
 
@@ -435,14 +434,6 @@ function ChildGridView(props) {
 
   // REACT QUERY
 
-  if (objMetadata.isError) {
-    // log error and notify user
-    console.log(`ChildGridView() - ${objMetadata.error.message}`);
-
-    // notify user of error
-    toast.error("Error retrieving metadata", { autoClose: 5000 });
-  }
-
   function loadTemplateOptions() {
     const options = [];
     // load template options for this object
@@ -458,7 +449,7 @@ function ChildGridView(props) {
 
     console.log(`template options loaded`);
 
-    templateOptions.current = options;
+    setTemplateOptions(options);
     prevTemplateOptions.current = options;
 
     return options;
@@ -535,11 +526,21 @@ function ChildGridView(props) {
     }
   }
 
+  // REACT QUERY LOADING
+
+  if (objMetadata.isError) {
+    // log error and notify user
+    console.log(`ChildGridView() - ${objMetadata.error.message}`);
+
+    // notify user of error
+    toast.error("Error retrieving metadata", { autoClose: 5000 });
+  }
+
   // load template options
   // set selectedTemplate based on preferences or defaults
   if (
     objMetadata.isSuccess &&
-    !_.isEqual(templateOptions.current, prevTemplateOptions.current) &&
+    !_.isEqual(templateOptions, prevTemplateOptions.current) &&
     !_.isEqual(columnDefs, prevColumnDefs.current)
   ) {
     try {
@@ -574,7 +575,6 @@ function ChildGridView(props) {
 
     if (tempFields.length > 0) {
       const gridCols = ghf.createGridColumns2(
-        childObject,
         tempFields,
         objMetadata,
         changedCellIds
@@ -700,7 +700,7 @@ function ChildGridView(props) {
       }}
       className={classes.gridStyle}
     >
-      {/* <SaveTemplateDialog
+      <SaveTemplateDialog
         saveTemplateFormOpen={saveTemplateFormOpen}
         setSaveTemplateFormOpen={setSaveTemplateFormOpen}
         templateName={saveTemplateName}
@@ -711,9 +711,9 @@ function ChildGridView(props) {
         selectedObject={childObject}
         templateOptions={templateOptions}
         setTemplateOptions={setTemplateOptions}
-        setColumnDefs={setColDefs}
+        setColumnDefs={setColumnDefs}
         gridRef={gridRef}
-      /> */}
+      />
 
       {/* grid toolbar */}
       <Toolbar
@@ -834,7 +834,7 @@ function ChildGridView(props) {
           getOptionLabel={(option) => (option ? option.value : "")}
           includeInputInList
           isOptionEqualToValue={(option, value) => option.id === value.id}
-          options={templateOptions.current}
+          options={templateOptions}
           value={selectedTemplate ? selectedTemplate : null}
           ref={templateSelectorRef}
           renderInput={(params) => (

@@ -7,11 +7,12 @@ import GridViewRenderer from "../gridViewRenderer/gridViewRenderer";
 
 // react query hooks
 import useGridPreferences from "../../hooks/getGridPreferencesHook";
+import useObjMetadata from "../../hooks/getObjMetadataHook";
+import useOrgObjects from "../../hooks/getOrgObjectsHook";
 import useObjPreferences from "../../hooks/getObjPreferencesHook";
 import useObjQueries from "../../hooks/getObjQueriesHook";
 import useObjTemplates from "../../hooks/getObjTemplatesHook";
 import useTemplateFields from "../../hooks/getTemplateFieldsHook";
-import useOrgObjects from "../../hooks/getOrgObjectsHook";
 import useRelationPreferences from "../../hooks/getRelationshipPreferencesHook";
 
 // PubSubJS
@@ -154,7 +155,7 @@ function GridHeader() {
   const [queryRuleText, setQueryRuleText] = useState("");
 
   // react query
-
+  const objMetadata = useObjMetadata(selectedObject, userInfo);
   const orgObjects = useOrgObjects(userInfo);
   const objTemplates = useObjTemplates(userInfo);
   const templateFields = useTemplateFields(userInfo);
@@ -299,7 +300,7 @@ function GridHeader() {
       <SelectTemplate
         {...props}
         selectedObject={selectedObject}
-        objectMetadata={objectMetadata}
+        objMetadata={objMetadata}
         setQueryRule={setQueryRule}
       />
     );
@@ -381,10 +382,9 @@ function GridHeader() {
       });
 
       // create the template records
-      const templateRecs = ghf.createSaveTemplateRecords(
-        selectedObject.id,
+      const templateRecs = ghf.createSaveTemplateRecords2(
         visibleColumns,
-        objectMetadata,
+        objMetadata,
         selectedTemplate
       );
 
@@ -681,27 +681,9 @@ function GridHeader() {
     }
   }
 
-  // get the org objects
+  // REACT QUERY LOADING
 
-  // if (orgObjects.isLoading) {
-  //   dispatch(setLoadingIndicator(true));
-  // } else {
-  //   dispatch(setLoadingIndicator(false));
-  // }
-
-  if (orgObjects.isError) {
-    // log error and notify user
-    console.log(`gridHeader() - ${orgObjects.error.message}`);
-
-    // notify user of error
-    toast.error("Error retrieving org objects", { autoClose: 5000 });
-
-    dispatch(setLoadingIndicator(false));
-
-    // disable query
-    fetchOrgObjects.current = false;
-  }
-
+  // get all org objects
   if (
     orgObjects.isSuccess &&
     !_.isEqual(orgObjects.data, prevOrgObjects.current)
@@ -723,23 +705,26 @@ function GridHeader() {
     console.log("Setting object options");
   }
 
-  // get the user object preferences - dependent on orgObjects query
-  // if (objPreferences.isLoading) {
+  if (orgObjects.isError) {
+    // log error and notify user
+    console.log(`gridHeader() - ${orgObjects.error.message}`);
+
+    // notify user of error
+    toast.error("Error retrieving org objects", { autoClose: 5000 });
+
+    dispatch(setLoadingIndicator(false));
+
+    // disable query
+    fetchOrgObjects.current = false;
+  }
+
+  // if (orgObjects.isLoading) {
   //   dispatch(setLoadingIndicator(true));
   // } else {
   //   dispatch(setLoadingIndicator(false));
   // }
 
-  if (objPreferences.isError) {
-    // log error and notify user
-    console.log(`gridHeader() - ${objPreferences.error.message}`);
-
-    // notify user of error
-    toast.error(objPreferences.error.message, { autoClose: 5000 });
-
-    dispatch(setLoadingIndicator(false));
-  }
-
+  // get the user object preferences - dependent on orgObjects query
   if (
     objPreferences.isSuccess &&
     !_.isEqual(objPreferences.data, prevObjectPreferences.current)
@@ -774,12 +759,279 @@ function GridHeader() {
     // dispatch(setLoadingIndicator(false));
   }
 
-  // get the user grid preferences - dependent on selectedObject
-  // if (gridPreferences.isLoading) {
+  if (objPreferences.isError) {
+    // log error and notify user
+    console.log(`gridHeader() - ${objPreferences.error.message}`);
+
+    // notify user of error
+    toast.error(objPreferences.error.message, { autoClose: 5000 });
+
+    dispatch(setLoadingIndicator(false));
+  }
+
+  // if (objPreferences.isLoading) {
   //   dispatch(setLoadingIndicator(true));
   // } else {
   //   dispatch(setLoadingIndicator(false));
   // }
+
+  // SELECTED OBJECT CHANGED
+  if (
+    objMetadata.isSuccess &&
+    !_.isEqual(selectedObject, prevSelectedObject.current)
+  ) {
+    /*  when the selected object changes
+      1 - load the template options
+      2 - load the query options
+      3 - create the queryBuilder columns
+      4 - set selected template & query based on preferences or defaults
+      5 - get the relationship preferences
+      6 - create the subviews based on user relationship preferences
+      7 - set the view options based on the user object preference
+    */
+
+    console.log("selected object changed running");
+
+    prevSelectedObject.current = { ...selectedObject };
+
+    // load template options for this object
+    let tmpOptions = [];
+    objTemplates.data.forEach((t) => {
+      if (t.object === selectedObject.id) {
+        const newOpt = {
+          id: t.id,
+          value: t.template_name,
+        };
+        tmpOptions.push(newOpt);
+      }
+    });
+
+    if (tmpOptions.length === 0) {
+      // no templates defined for this object
+
+      // notify user of error
+      toast.warn(`No templates defined for ${selectedObject.id}`, {
+        autoClose: 5000,
+      });
+
+      setSelectedTemplate(null);
+      prevSelectedTemplate.current = null;
+    } else {
+      setTemplateOptions(tmpOptions);
+      console.log(`template options loaded for ${selectedObject.id}`);
+    }
+
+    // create the query options list
+    const qryOptions = [];
+    objQueries.data.forEach((q) => {
+      if (q.object === selectedObject.id) {
+        const newOpt = {
+          id: q.id,
+          value: q.name,
+        };
+        qryOptions.push(newOpt);
+      }
+    });
+
+    if (qryOptions.length === 0) {
+      // no queries defined for this object
+
+      // notify user of error
+      toast.warn(`No queries defined for ${selectedObject.id}`, {
+        autoClose: 5000,
+      });
+
+      setSelectedQuery(null);
+      prevSelectedQuery.current = null;
+      setQueryRule([]);
+      setQueryRuleText("");
+      queryBuilderRef.current.setRules([]);
+
+      // send event to grid to clear data
+      PubSub.publish("ClearData", true);
+
+      console.log(
+        `gridHeader() - No queries found for ${selectedObject.value}`
+      );
+    } else {
+      setQueryOptions(qryOptions);
+      console.log(`query options loaded for ${selectedObject.id}`);
+    }
+
+    // create QueryBuilder columns
+    const qbColumns = ghf.createQueryBuilderColumns(objMetadata);
+    queryColumns.current = qbColumns;
+    console.log("SelectecdObjectChanged - Query columns loaded");
+
+    // get template and query preferences for selectedObject
+    const gridPref = gridPreferences.data.find(
+      (p) => p.object === selectedObject.id
+    );
+    let preferenceData = null;
+    let userPref = null;
+
+    if (gridPref) {
+      // find the template option with this Id
+      const tmpOption = templateOptions.find(
+        (o) => o.id === gridPref.templateid
+      );
+
+      // use this template
+      setSelectedTemplate(tmpOption);
+
+      console.log(
+        `SelectecdObjectChanged - Found user template preference for ${selectedObject.id}.  Setting selectedTemplate state to ${tmpOption.value}`
+      );
+
+      // find the query option with this id
+      const qryOption = queryOptions.find((o) => o.id === gridPref.queryid);
+
+      // use this query
+      setSelectedQuery(qryOption);
+
+      console.log(
+        `SelectecdObjectChanged - Found query user preference for ${selectedObject.id}.  Setting selectedQuery state to ${qryOption.value}`
+      );
+
+      // no need to run useEffect for selectedQuery changed
+      // prevSelectedQuery.current = qryOption;
+
+      // set the query rule
+      const query = objQueries.data.find((q) => q.id === qryOption.id);
+      const rule = query.query_rules;
+      setQueryRule(rule);
+      console.log("SelectecdObjectChanged - Query rule loaded");
+    }
+
+    if (!gridPref) {
+      // check for default template preference
+      let defaultTemplate = objTemplates.data.find(
+        (t) => t.object === selectedObject.id && t.default === true
+      );
+
+      if (defaultTemplate) {
+        const defaultPref = {
+          id: defaultTemplate.id,
+          value: defaultTemplate.template_name,
+        };
+        setSelectedTemplate(defaultPref);
+        console.log(
+          `SelectedObjectChanged - Found default template for ${selectedObject.value}.  Setting selectedTemplate state to ${defaultPref.value}`
+        );
+      } else {
+        if (tmpOptions.length === 0) {
+          // create default grid columns
+          // we don't care about the payload
+          // at any given time, only 1 gridView (MainGrid or TranspositionGrid) will be
+          // mounted and receive the event
+          PubSub.publish("CreateDefaultGridColumns", true);
+        } else {
+          // use the first template
+          setSelectedTemplate(tmpOptions[0]);
+          console.log(
+            `SelectedObjectChanged - No default template found for ${selectedObject.value}.  Setting selectedTemplate to ${tmpOptions[0].value}`
+          );
+        }
+      }
+
+      // check for default query preference
+      let defaultQuery = objQueries.data.find(
+        (t) => t.object === selectedObject.id && t.default === true
+      );
+
+      if (defaultQuery) {
+        const defaultQueryPref = {
+          id: defaultQuery.id,
+          value: defaultQuery.name,
+        };
+        setSelectedQuery(defaultQueryPref);
+
+        // no need to run useEffect for selectedQuery changed
+        // prevSelectedQuery.current = defaultQueryPref;
+
+        console.log(
+          `SelectedObjectChanged - Found default query preference for ${selectedObject.value}.  Setting selectedQuery to ${defaultQueryPref.value}`
+        );
+
+        // set the query rule
+        // const query = objQueries.data.find((q) => q.id === defaultQueryPref.id);
+        // const rule = query.query_rules;
+        // setQueryRule(rule);
+
+        // console.log("SelectecdObjectChanged - Query rule loaded");
+      } else {
+        if (qryOptions.length > 0) {
+          // use the first query
+          setSelectedQuery(qryOptions[0]);
+
+          // no need to run useEffect for selectedQuery changed
+          // prevSelectedQuery.current = qryOptions[0];
+
+          console.log(
+            `SelectecdObjectChanged - No default query preference found for ${selectedObject.value}. Setting selectedQuery to ${qryOptions[0].value}`
+          );
+
+          // set the query rule
+          // const query = objQueries.data.find((q) => q.id === qryOptions[0].id);
+          // const rule = query.query_rules;
+          // setQueryRule(rule);
+          // console.log("SelectecdObjectChanged - Query rule loaded");
+        } else {
+          setQueryRule([]);
+        }
+      }
+    }
+
+    // set view options
+    const prefRec = objPreferences.data[0];
+
+    const objectViewPrefs = prefRec.preferences.find(
+      (p) => p.object === selectedObject.id
+    );
+
+    let optionsList = ["Grid"];
+
+    if (objectViewPrefs) {
+      if (objectViewPrefs.ganttView === true) {
+        optionsList.push("Gantt");
+      }
+
+      if (objectViewPrefs.kanbanView === true) {
+        optionsList.push("Kanban");
+      }
+
+      if (objectViewPrefs.scheduleView === true) {
+        optionsList.push("Schedule");
+      }
+
+      if (objectViewPrefs.transpositionView === true) {
+        optionsList.push("Transposition");
+      }
+    }
+
+    gridViewOptions.current = [...optionsList];
+
+    setSelectedGridView(optionsList[0]);
+  }
+
+  // SELECTED TEMPLATE CHANGED
+
+  if (
+    objMetadata.isSuccess &&
+    !_.isEqual(selectedTemplate, prevSelectedTemplate.current)
+  ) {
+  }
+
+  // get the user grid preferences - dependent on selectedObject
+  if (
+    gridPreferences.isSuccess &&
+    !_.isEqual(gridPreferences.data, prevGridPreferences.current)
+  ) {
+    prevGridPreferences.current = gridPreferences.data;
+    console.log("Grid preferences loaded");
+
+    // dispatch(setLoadingIndicator(false));
+  }
 
   if (gridPreferences.isError) {
     // log error and notify user
@@ -791,22 +1043,20 @@ function GridHeader() {
     dispatch(setLoadingIndicator(false));
   }
 
-  if (
-    gridPreferences.isSuccess &&
-    !_.isEqual(gridPreferences.data, prevGridPreferences.current)
-  ) {
-    prevGridPreferences.current = gridPreferences.data;
-    console.log("Grid preferences loaded");
-
-    // dispatch(setLoadingIndicator(false));
-  }
-
-  // get template options
-  // if (objTemplates.isLoading) {
+  // if (gridPreferences.isLoading) {
   //   dispatch(setLoadingIndicator(true));
   // } else {
   //   dispatch(setLoadingIndicator(false));
   // }
+
+  // get public templates and user private templates - for all objects
+  if (
+    objTemplates.isSuccess &&
+    !_.isEqual(objTemplates.data, prevTemplates.current)
+  ) {
+    prevTemplates.current = objTemplates.data;
+    console.log("Templates loaded");
+  }
 
   if (objTemplates.isError) {
     // log error and notify user
@@ -818,21 +1068,20 @@ function GridHeader() {
     dispatch(setLoadingIndicator(false));
   }
 
-  if (
-    objTemplates.isSuccess &&
-    !_.isEqual(objTemplates.data, prevTemplates.current)
-  ) {
-    prevTemplates.current = objTemplates.data;
-    console.log("Templates loaded");
-  }
-
-  // get query options
-
-  // if (objQueries.isLoading) {
+  // if (objTemplates.isLoading) {
   //   dispatch(setLoadingIndicator(true));
   // } else {
   //   dispatch(setLoadingIndicator(false));
   // }
+
+  // get public queries and user private queries - for all objects
+  if (
+    objQueries.isSuccess &&
+    !_.isEqual(objQueries.data, prevQueries.current)
+  ) {
+    prevQueries.current = objQueries.data;
+    console.log("Queries loaded");
+  }
 
   if (objQueries.isError) {
     // log error and notify user
@@ -844,22 +1093,20 @@ function GridHeader() {
     dispatch(setLoadingIndicator(false));
   }
 
-  if (
-    objQueries.isSuccess &&
-    !_.isEqual(objQueries.data, prevQueries.current)
-  ) {
-    prevQueries.current = objQueries.data;
-    console.log("Queries loaded");
-  }
+  // if (objQueries.isLoading) {
+  //   dispatch(setLoadingIndicator(true));
+  // } else {
+  //   dispatch(setLoadingIndicator(false));
+  // }
 
   // get the user relation preferences - dependent on userInfo
-  /*
-    if (relationPreferences.isLoading) {
-        dispatch(setLoadingIndicator(true));
-    } else {
-        dispatch(setLoadingIndicator(false));
-    }
-  */
+  if (
+    relationPreferences.isSuccess &&
+    !_.isEqual(relationPreferences.data, prevRelationPreferences.current)
+  ) {
+    prevRelationPreferences.current = relationPreferences.data;
+    console.log("Relation preferences loaded");
+  }
 
   if (relationPreferences.isError) {
     // log error and notify user
@@ -871,23 +1118,15 @@ function GridHeader() {
     dispatch(setLoadingIndicator(false));
   }
 
-  if (
-    relationPreferences.isSuccess &&
-    !_.isEqual(relationPreferences.data, prevRelationPreferences.current)
-  ) {
-    prevRelationPreferences.current = relationPreferences.data;
-    console.log("Relation preferences loaded");
-  }
+  /*
+    if (relationPreferences.isLoading) {
+        dispatch(setLoadingIndicator(true));
+    } else {
+        dispatch(setLoadingIndicator(false));
+    }
+  */
 
-  // get the template fields
-  if (templateFields.isError) {
-    // log error and notify user
-    console.log(`gridHeader() - ${templateFields.error.message}`);
-
-    // notify user of error
-    toast.error(templateFields.error.message, { autoClose: 5000 });
-  }
-
+  // get template fields - for all objects
   if (
     templateFields.isSuccess &&
     !_.isEqual(templateFields.data, prevTemplateFields.current)
@@ -896,360 +1135,21 @@ function GridHeader() {
     console.log("Template fields loaded");
   }
 
-  // selectedObject changed
-  useEffect(() => {
-    /*  when the selected object changes
-      1 - get metadata for selected object
-      2 - create the queryBuilder columns
-      3 - load the template options
-      4 - load the query options
-      5 - set selected template & query based on preferences or defaults
-      6 - get the relationship preferences
-      7 - create the subviews based on user relationship preferences
-      8 - set the view options based on the user object preference
-  */
-    const objChanged = async () => {
-      if (!selectedObject) {
-        return;
-      }
+  if (templateFields.isError) {
+    // log error and notify user
+    console.log(`gridHeader() - ${templateFields.error.message}`);
 
-      // if selectedObject hasn't changed, return
-      if (_.isEqual(selectedObject, prevSelectedObject.current)) {
-        dispatch(setLoadingIndicator(false));
-        return;
-      }
+    // notify user of error
+    toast.error(templateFields.error.message, { autoClose: 5000 });
+  }
 
-      // dispatch(setLoadingIndicator(true));
+  // if (templateFields.isLoading) {
+  //   dispatch(setLoadingIndicator(true));
+  // } else {
+  //   dispatch(setLoadingIndicator(false));
+  // }
 
-      prevSelectedObject.current = { ...selectedObject };
-
-      console.log(
-        `UseEffect SelectecdObjectChanged - Running gridHeader selected object changed for object ${selectedObject.id}`
-      );
-
-      let objMetadata = null;
-
-      try {
-        // get or create the objectMetadata
-        objMetadata = objectMetadata.find(
-          (f) => f.objName === selectedObject.id
-        );
-
-        if (objMetadata === undefined) {
-          // get object metadata
-          console.log(
-            `UseEffect SelectecdObjectChanged - Getting object metadata for ${selectedObject.id}`
-          );
-          const metadataResult = await ghf.getObjectMetadata(
-            selectedObject.id,
-            userInfo,
-            objectMetadata
-          );
-
-          if (metadataResult.status !== "ok") {
-            throw new Error(
-              `UseEffect SelectecdObjectChanged - Error retrieving metadata for ${selectedObject.id}`
-            );
-          }
-
-          // store object metadata in global state
-          objMetadata = {
-            objName: selectedObject.id,
-            metadata: metadataResult.records,
-          };
-
-          dispatch(addMetadata(objMetadata));
-        }
-
-        // load template options for this object
-        let tmpOptions = [];
-        objTemplates.data.forEach((t) => {
-          if (t.object === selectedObject.id) {
-            const newOpt = {
-              id: t.id,
-              value: t.template_name,
-            };
-            tmpOptions.push(newOpt);
-          }
-        });
-
-        if (tmpOptions.length === 0) {
-          // no templates defined for this object
-
-          // notify user of error
-          toast.warn(`No templates defined for ${selectedObject.id}`, {
-            autoClose: 5000,
-          });
-
-          setSelectedTemplate(null);
-          prevSelectedTemplate.current = null;
-        } else {
-          setTemplateOptions(tmpOptions);
-        }
-
-        // create the query options list
-        const qryOptions = [];
-        objQueries.data.forEach((q) => {
-          if (q.object === selectedObject.id) {
-            const newOpt = {
-              id: q.id,
-              value: q.name,
-            };
-            qryOptions.push(newOpt);
-          }
-        });
-
-        if (qryOptions.length === 0) {
-          // no queries defined for this object
-
-          // notify user of error
-          toast.warn(`No queries defined for ${selectedObject.id}`, {
-            autoClose: 5000,
-          });
-
-          setSelectedQuery(null);
-          prevSelectedQuery.current = null;
-          setQueryRule([]);
-          setQueryRuleText("");
-          queryBuilderRef.current.setRules([]);
-
-          // send event to grid to clear data
-          PubSub.publish("ClearData", true);
-
-          console.log(
-            `UseEffect SelectecdObjectChanged - No queries found for ${selectedObject.value}`
-          );
-        } else {
-          setQueryOptions(qryOptions);
-        }
-
-        // create QueryBuilder columns
-        const qbColumns = await ghf.createQueryBuilderColumns(
-          objMetadata.metadata
-        );
-
-        // setQueryColumns([...qbColumns]);
-        queryColumns.current = qbColumns;
-        console.log("UseEffect SelectecdObjectChanged - Query columns loaded");
-
-        // get template and query preferences for selectedObject
-        const gridPref = gridPreferences.data.find(
-          (p) => p.object === selectedObject.id
-        );
-        let preferenceData = null;
-        let userPref = null;
-
-        if (gridPref) {
-          // find the template option with this Id
-          const tmpOption = templateOptions.find(
-            (o) => o.id === gridPref.templateid
-          );
-
-          // use this template
-          setSelectedTemplate(tmpOption);
-
-          console.log(
-            `UseEffect SelectecdObjectChanged - Found user template preference for ${selectedObject.id}.  Setting selectedTemplate state to ${tmpOption.value}`
-          );
-
-          // find the query option with this id
-          const qryOption = queryOptions.find((o) => o.id === gridPref.queryid);
-
-          // use this query
-          setSelectedQuery(qryOption);
-
-          console.log(
-            `UseEffect SelectecdObjectChanged - Found query user preference for ${selectedObject.id}.  Setting selectedQuery state to ${qryOption.value}`
-          );
-
-          // no need to run useEffect for selectedQuery changed
-          prevSelectedQuery.current = qryOption;
-
-          // set the query rule
-          const query = objQueries.data.find((q) => q.id === qryOption.id);
-          const rule = query.query_rules;
-          setQueryRule(rule);
-          console.log("UseEffect SelectecdObjectChanged - Query rule loaded");
-        }
-
-        if (!gridPref) {
-          // check for default template preference
-          let defaultTemplate = objTemplates.data.find(
-            (t) => t.object === selectedObject.id && t.default === true
-          );
-
-          if (defaultTemplate) {
-            const defaultPref = {
-              id: defaultTemplate.id,
-              value: defaultTemplate.template_name,
-            };
-            setSelectedTemplate(defaultPref);
-            console.log(
-              `UseEffect SelectecdObjectChanged - Found default template for ${selectedObject.value}.  Setting selectedTemplate state to ${defaultPref.value}`
-            );
-          } else {
-            if (tmpOptions.length === 0) {
-              // create default grid columns
-              // we don't care about the payload
-              // at any given time, only 1 gridView (MainGrid or TranspositionGrid) will be
-              // mounted and receive the event
-              PubSub.publish("CreateDefaultGridColumns", true);
-            } else {
-              // use the first template
-              setSelectedTemplate(tmpOptions[0]);
-              console.log(
-                `UseEffect SelectecdObjectChanged - No default template found for ${selectedObject.value}.  Setting selectedTemplate to ${tmpOptions[0].value}`
-              );
-            }
-          }
-
-          // check for default query preference
-          let defaultQuery = objQueries.data.find(
-            (t) => t.object === selectedObject.id && t.default === true
-          );
-
-          if (defaultQuery) {
-            const defaultQueryPref = {
-              id: defaultQuery.id,
-              value: defaultQuery.name,
-            };
-            setSelectedQuery(defaultQueryPref);
-
-            // no need to run useEffect for selectedQuery changed
-            prevSelectedQuery.current = defaultQueryPref;
-
-            console.log(
-              `UseEffect SelectecdObjectChanged - Found default query preference for ${selectedObject.value}.  Setting selectedQuery to ${defaultQueryPref.value}`
-            );
-
-            // set the query rule
-            const query = objQueries.data.find(
-              (q) => q.id === defaultQueryPref.id
-            );
-            const rule = query.query_rules;
-            setQueryRule(rule);
-
-            console.log("UseEffect SelectecdObjectChanged - Query rule loaded");
-          } else {
-            if (qryOptions.length > 0) {
-              // use the first query
-              setSelectedQuery(qryOptions[0]);
-
-              // no need to run useEffect for selectedQuery changed
-              prevSelectedQuery.current = qryOptions[0];
-
-              console.log(
-                `UseEffect SelectecdObjectChanged - No default query preference found for ${selectedObject.value}. Setting selectedQuery to ${qryOptions[0].value}`
-              );
-
-              // set the query rule
-              const query = objQueries.data.find(
-                (q) => q.id === qryOptions[0].id
-              );
-              const rule = query.query_rules;
-              setQueryRule(rule);
-
-              // set the query rule
-
-              console.log(
-                "UseEffect SelectecdObjectChanged - Query rule loaded"
-              );
-            } else {
-              setQueryRule([]);
-            }
-          }
-        }
-
-        // find the relationship preferences for the selected object
-        const objRelPrefs = relationPreferences.data.preferences.find(
-          (p) => p.object === selectedObject.id
-        );
-
-        // get metadata for relationships
-        // if (objRelPrefs) {
-        //   const prefs = objRelPrefs.relations;
-
-        //   // get metadata if needed
-        //   for (const p of prefs) {
-        //     let metadata = objectMetadata.find((f) => f.objName === p.id);
-
-        //     if (!metadata) {
-        //       console.log(`getting object metadata for ${p.id}`);
-        //       metadata = await ghf.getObjectMetadata(
-        //         p.id,
-        //         userInfo,
-        //         objectMetadata
-        //       );
-
-        //       const newObjMetadata = {
-        //         objName: p.id,
-        //         metadata: metadata.records,
-        //       };
-
-        //       dispatch(addMetadata(newObjMetadata));
-        //     }
-        //   }
-        // }
-
-        // set view options
-        const prefRec = objPreferences.data[0];
-
-        const objectViewPrefs = prefRec.preferences.find(
-          (p) => p.object === selectedObject.id
-        );
-
-        let optionsList = ["Grid"];
-
-        if (objectViewPrefs) {
-          if (objectViewPrefs.ganttView === true) {
-            optionsList.push("Gantt");
-          }
-
-          if (objectViewPrefs.kanbanView === true) {
-            optionsList.push("Kanban");
-          }
-
-          if (objectViewPrefs.scheduleView === true) {
-            optionsList.push("Schedule");
-          }
-
-          if (objectViewPrefs.transpositionView === true) {
-            optionsList.push("Transposition");
-          }
-        }
-
-        gridViewOptions.current = [...optionsList];
-
-        setSelectedGridView(optionsList[0]);
-
-        // dispatch(setLoadingIndicator(false));
-      } catch (error) {
-        dispatch(setLoadingIndicator(false));
-
-        // log error and notify user
-        console.log(error.message);
-
-        // notify user of error
-        toast.error(error.message, { autoClose: 5000 });
-      }
-    };
-
-    objChanged();
-  }, [
-    selectedObject,
-    objectOptions,
-    objectMetadata,
-    gridPreferences,
-    objPreferences,
-    objQueries,
-    objTemplates,
-    queryOptions,
-    relationPreferences,
-    templateOptions,
-    selectedGridView,
-    dispatch,
-    userInfo,
-  ]);
+  // END REACT QUERY LOADING
 
   useEffect(() => {
     // update the QueryBuilder rules when the selected query changes
@@ -1480,6 +1380,7 @@ function GridHeader() {
             sx={{ ml: 5, width: 150 }}
           />
         </Toolbar>
+
         {/* grid toolbar */}
         <Toolbar
           variant='dense'
@@ -1661,6 +1562,7 @@ function GridHeader() {
             Showing Save Errors
           </Box>
         </Toolbar>
+
         {/* query builder and query panel */}
         <Box
           sx={{
@@ -1678,7 +1580,7 @@ function GridHeader() {
             mr: 2,
             mb: 3,
             width: "90%",
-            height: "50%",
+            height: "30%",
             overflow: "auto",
           }}
           border={2}
@@ -1772,13 +1674,7 @@ function GridHeader() {
               >
                 <ColumnsDirective>
                   {queryColumns.current.map((item) => {
-                    const objMetadata = objectMetadata.find(
-                      (m) => m.objName === selectedObject.id
-                    );
-                    if (objMetadata === undefined) {
-                      return;
-                    }
-                    const metadataFields = objMetadata.metadata.fields;
+                    const metadataFields = objMetadata.data.fields;
                     const metadataField = metadataFields.find(
                       (f) => f.name === item.field
                     );
@@ -2248,6 +2144,7 @@ function GridHeader() {
             gridPreferences={gridPreferences}
             mainGridRef={mainGridRef}
             objectOptions={objectOptions}
+            objMetadata={objMetadata}
             objPreferences={objPreferences}
             objQueries={objQueries}
             objTemplates={objTemplates}

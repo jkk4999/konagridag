@@ -318,7 +318,6 @@ export function createGridColumns(
 }
 
 export function createGridColumns2(
-  selectedObject,
   templateFields,
   objMetadata,
   changedCellIds
@@ -1007,7 +1006,7 @@ export function createGridField(metadataField, fieldMetadata, changedCellIds) {
 // queryBuilder functions
 
 export function createQueryBuilderColumns(objMetadata) {
-  const objFields = objMetadata.fields;
+  const objFields = objMetadata.data.fields;
 
   const cols = [];
 
@@ -1874,7 +1873,7 @@ function processGroup(ruleGroup, objFields, objName, result) {
   result.push(`(${queryStr})`);
 }
 
-export async function getQuerySQL(query, objFields, objName) {
+export function getQuerySQL(query, objFields, objName) {
   let result = [];
 
   const outerCondition = query.condition;
@@ -1919,6 +1918,45 @@ export function createSaveTemplateRecords(
   // get the object fields metadata
   const objMetadata = objectMetadata.find((o) => o.objName === selectedObject);
   const metadataFields = objMetadata.metadata.fields;
+
+  const templateRecs = [];
+  gridColumns.forEach((v, index) => {
+    // get datatype of field from metadata
+    const metadataField = metadataFields.find((f) => f.name === v.colDef.field);
+    const fieldDataType = metadataField.dataType;
+
+    const isGroup = v.colDef.rowGroup || v.rowGroupActive;
+
+    const newRec = {
+      name: v.colDef.field,
+      templateid: selectedTemplate === null ? null : selectedTemplate.id,
+      column_order: index,
+      datatype: fieldDataType,
+      sort: v.sort !== undefined ? v.sort : "",
+      filter: "",
+      aggregation: v.aggFunc !== undefined ? v.aggFunc : "",
+      split: v.pinned ? v.pinned : false,
+      formula: "",
+      group: isGroup,
+      group_field: "",
+    };
+
+    templateRecs.push(newRec);
+  });
+
+  return templateRecs;
+}
+
+export function createSaveTemplateRecords2(
+  gridColumns,
+  objMetadata,
+  selectedTemplate
+) {
+  // create a grid row (template record) for each grid column
+
+  // get the object fields metadata
+
+  const metadataFields = objMetadata.data.fields;
 
   const templateRecs = [];
   gridColumns.forEach((v, index) => {
